@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { deliveryHistoryRecipients, sendWithDeliveryAudit, testEmailRecipient, type DeliveryAttempt } from "../lib/email-delivery.ts";
+import { deliveryHistoryRecipients, sendWithDeliveryAudit, testEmailRecipient, uniqueDeliveryMessages, type DeliveryAttempt } from "../lib/email-delivery.ts";
 import { emailProviderStatus, sendReminderEmail } from "../lib/reminders.ts";
 
 test("testing mode targets primary owner, not the signed-in coadmin", () => {
@@ -12,6 +12,14 @@ test("viewers never receive administrator delivery history", () => {
   const admins = ["owner@example.com", "admin@example.com"];
   assert.deepEqual(deliveryHistoryRecipients(false, "viewer@example.com", admins), ["viewer@example.com"]);
   assert.deepEqual(deliveryHistoryRecipients(true, admins[1], admins), admins);
+});
+
+test("digest audit rows display as one email without merging separate sends", () => {
+  const row = { recipientEmail: "owner@example.com", providerId: "digest-id", attemptedAt: "2026-10-08T00:00:00Z", subject: "Updates", status: "sent" };
+  const rows = [row, { ...row }, { ...row, providerId: "second-id" }];
+  assert.equal(uniqueDeliveryMessages(rows).length, 2);
+  assert.equal(rows.length, 3);
+  assert.equal(uniqueDeliveryMessages([{ ...row, status: "failed", providerId: "" }, { ...row, status: "failed", providerId: "" }]).length, 1);
 });
 
 test("accepted test is saved as pending then sent with provider ID", async () => {

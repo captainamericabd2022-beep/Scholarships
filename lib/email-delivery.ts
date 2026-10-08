@@ -14,6 +14,19 @@ export function deliveryHistoryRecipients(isAdministrator: boolean, email: strin
   return isAdministrator ? [...new Set(administrators)] : [email];
 }
 
+// One digest has several event audit rows. Display the message once while
+// keeping every event row intact for deadline/change deduplication.
+export function uniqueDeliveryMessages<T extends { recipientEmail: string; providerId: string; attemptedAt: string; subject: string; status: string }>(records: T[]) {
+  const seen = new Set<string>();
+  return records.filter((record) => {
+    const attempt = record.providerId || `${record.attemptedAt}|${record.subject}`;
+    const key = `${record.recipientEmail}|${record.status}|${attempt}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /** Persist before sending; only provider acceptance earns `sent`. */
 export async function sendWithDeliveryAudit(
   send: () => Promise<string>,

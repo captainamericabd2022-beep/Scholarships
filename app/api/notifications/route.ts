@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { deliveryHistoryRecipients, sendWithDeliveryAudit, testEmailRecipient } from "../../../lib/email-delivery";
+import { deliveryHistoryRecipients, sendWithDeliveryAudit, testEmailRecipient, uniqueDeliveryMessages } from "../../../lib/email-delivery";
 import { getDb } from "../../../db";
 import { listManualEdits } from "../../../db/manual-edits";
 import { applyManualEdit } from "../../../lib/scholarship-edits";
@@ -151,9 +151,10 @@ export async function GET(request: Request) {
     const provider = await emailProviderStatus();
     const db = getDb();
     const historyScope = inArray(notificationDeliveries.recipientEmail, deliveryHistoryRecipients(user.isOwner, user.email, configuredAdministratorEmails()));
-    const recentDeliveries = await db
+    const recentRows = await db
       .select({
         recipientEmail: notificationDeliveries.recipientEmail,
+        providerId: notificationDeliveries.providerId,
         subject: notificationDeliveries.subject,
         status: notificationDeliveries.status,
         attemptedAt: notificationDeliveries.attemptedAt,
@@ -163,7 +164,8 @@ export async function GET(request: Request) {
       .from(notificationDeliveries)
       .where(historyScope)
       .orderBy(desc(notificationDeliveries.attemptedAt))
-      .limit(8);
+      .limit(100);
+    const recentDeliveries = uniqueDeliveryMessages(recentRows).slice(0, 8).map((row) => ({ recipientEmail: row.recipientEmail, subject: row.subject, status: row.status, attemptedAt: row.attemptedAt, sentAt: row.sentAt, error: row.error }));
     const [latestRun] = await db.select().from(monitorRuns).where(eq(monitorRuns.userId, user.userId)).orderBy(desc(monitorRuns.completedAt)).limit(1);
     const pendingReviews = user.isOwner ? await db.select({ id: sourceReviewQueue.id }).from(sourceReviewQueue).where(and(eq(sourceReviewQueue.userId, user.userId), eq(sourceReviewQueue.status, "pending"))) : [];
     const [lastSuccessful] = await db.select({ sentAt: notificationDeliveries.sentAt }).from(notificationDeliveries).where(and(historyScope, eq(notificationDeliveries.status, "sent"))).orderBy(desc(notificationDeliveries.sentAt)).limit(1);
