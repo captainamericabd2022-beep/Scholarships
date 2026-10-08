@@ -26,7 +26,7 @@ type Delivery = {
 type SettingsPayload = {
   preferences?: Preferences;
   provider?: { configured: boolean; name: string; senderScope?: "owner-only" | "multi-user"; testRecipient?: string };
-  health?: { lastAutomaticCheck: string; nextScheduledCheck: string; lastScheduledCheck: string; scheduledStatus: string; scheduledError: string; scheduleWindow: string; lastSuccessfulEmail: string; failedDeliveries: number; sourcesRequiringReview: number; monitorStatus: string };
+  health?: { lastAutomaticCheck: string; nextScheduledCheck: string; lastScheduledCheck: string; scheduledStatus: string; scheduledError: string; scheduleWindow: string; lastSuccessfulEmail: string; failedDeliveries: number; sourcesRequiringReview: number; sourcesUnavailable: number; monitorStatus: string };
   recentDeliveries?: Delivery[];
   automaticCheck?: string;
   error?: string;
@@ -192,8 +192,10 @@ export default function ReminderCenter({
               <div><span>Last provider-accepted email</span><strong>{health?.lastSuccessfulEmail ? formatTimestamp(health.lastSuccessfulEmail) : "None yet"}</strong></div>
               <div><span>Failed attempts in recent history</span><strong>{health?.failedDeliveries ?? 0}</strong></div>
               <div><span>Sources requiring review</span><strong>{health?.sourcesRequiringReview ?? 0}</strong></div>
+              <div><span>Sources blocked / unavailable</span><strong>{health?.sourcesUnavailable ?? 0}</strong></div>
             </div>
             {health?.scheduledError ? <p className="reminder-message">Last server error: {health.scheduledError}</p> : null}
+            {health?.sourcesUnavailable ? <p className="reminder-message">{health.sourcesUnavailable} official source{health.sourcesUnavailable === 1 ? "" : "s"} could not be checked. Existing facts were kept, not newly verified. The next daily job retries these sources; administrators can inspect each scholarship’s source-check details.</p> : null}
           </section>
 
           {preferences ? <form id="reminder-settings-form" className="reminder-settings" onSubmit={save}>

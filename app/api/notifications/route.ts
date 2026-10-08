@@ -9,6 +9,7 @@ import {
   notificationDeliveries,
   notificationPreferences,
   sourceReviewQueue,
+  scholarshipSourceChecks,
   viewerAccess,
 } from "../../../db/schema";
 import {
@@ -70,6 +71,7 @@ export async function GET(request: Request) {
     const recentDeliveries = uniqueDeliveryMessages(recentRows).slice(0, 8).map((row) => ({ recipientEmail: row.recipientEmail, subject: row.subject, status: row.status, attemptedAt: row.attemptedAt, sentAt: row.sentAt, error: row.error }));
     const [latestRun] = await db.select().from(monitorRuns).where(eq(monitorRuns.userId, user.userId)).orderBy(desc(monitorRuns.completedAt)).limit(1);
     const pendingReviews = user.isOwner ? await db.select({ id: sourceReviewQueue.id }).from(sourceReviewQueue).where(and(eq(sourceReviewQueue.userId, user.userId), eq(sourceReviewQueue.status, "pending"))) : [];
+    const unavailableSources = user.isOwner ? await db.select({ id: scholarshipSourceChecks.scholarshipId }).from(scholarshipSourceChecks).where(and(eq(scholarshipSourceChecks.userId, user.userId), eq(scholarshipSourceChecks.outcome, "check-failed"))) : [];
     const [lastSuccessful] = await db.select({ sentAt: notificationDeliveries.sentAt }).from(notificationDeliveries).where(and(historyScope, eq(notificationDeliveries.status, "sent"))).orderBy(desc(notificationDeliveries.sentAt)).limit(1);
     const failedDeliveries = recentDeliveries.filter((delivery) => delivery.status === "failed").length;
     const scheduled = await jobHealth(WATCH_JOB);
@@ -88,6 +90,7 @@ export async function GET(request: Request) {
         lastSuccessfulEmail: lastSuccessful?.sentAt ?? "",
         failedDeliveries,
         sourcesRequiringReview: pendingReviews.length,
+        sourcesUnavailable: unavailableSources.length,
         monitorStatus: latestRun?.status ?? "not-run",
       },
       automaticCheck: scheduleConfigured ? "Daily server-side official-source checks and unsent reminders run without a visit or login. The current plan schedules within the 09:00–09:59 Bangladesh-time window." : "Server scheduling is not configured. Administrator source refreshes also check for unsent reminders.",
