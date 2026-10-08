@@ -72,6 +72,9 @@ test("mobile reminder modal is closable and viewport-safe", async () => {
   ]);
   assert.match(component, /aria-label="Close reminder center"/);
   assert.match(component, /event\.key === "Escape"/);
+  assert.match(component, /createPortal\(<div className="reminder-layer"/);
+  assert.match(component, /<\/div>, document\.body\)/);
   assert.match(css, /height: 100dvh/);
   assert.match(css, /overflow-y: auto/);
+  assert.match(css, /\.lower-grid\s*\{\s*display: grid;\s*grid-template-columns: minmax\(0, 1\.2fr\)/);
 });

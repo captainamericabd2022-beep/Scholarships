@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import type { Scholarship } from "../lib/scholarships";
 import { daysUntilDateKey } from "../lib/reminders";
 
@@ -162,7 +163,7 @@ export default function ReminderCenter({
       <button className="reminder-button" type="button" onClick={showPanel}>
         <span aria-hidden="true">◷</span>Reminders
       </button>
-      {open ? <div className="reminder-layer">
+      {open ? createPortal(<div className="reminder-layer">
         <button className="drawer-backdrop" type="button" aria-label="Close reminder center" onClick={() => setOpen(false)}/>
         <aside className="reminder-panel" role="dialog" aria-modal="true" aria-labelledby="reminder-title">
           <div className="reminder-panel-header">
@@ -210,7 +211,7 @@ export default function ReminderCenter({
 
           <section className="delivery-history"><div className="reminder-section-title"><div><p className="eyebrow">DELIVERY HISTORY</p><h3>Recent messages</h3></div></div>{deliveries.length ? deliveries.map((delivery, index) => <article key={`${delivery.attemptedAt}-${index}`}><span className={`delivery-status delivery-${delivery.status}`}>{delivery.status}</span><div><strong>{delivery.subject}</strong><small>{formatDate(delivery.sentAt || delivery.attemptedAt)}{delivery.error ? ` · ${delivery.error}` : ""}</small></div></article>) : <p className="empty-copy">No reminder emails have been sent to this address yet.</p>}</section>
         </aside>
-      </div> : null}
+      </div>, document.body) : null}
     </>
   );
 }

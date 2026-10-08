@@ -798,12 +798,14 @@ th:first-child {
 
 .lower-grid {
   display: grid;
-  grid-template-columns: 1.2fr 0.95fr 0.85fr;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.95fr) minmax(0, 0.85fr);
   gap: 14px;
   margin-top: 14px;
 }
 
 .lower-grid .panel {
+  min-width: 0;
+  overflow-wrap: anywhere;
   min-height: 390px;
   padding: 21px;
 }
@@ -1310,7 +1312,7 @@ textarea:disabled {
   .kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .filter-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .search-field { grid-column: span 3; }
-  .lower-grid { grid-template-columns: 1fr 1fr; }
+  .lower-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .changes-panel { grid-column: span 2; min-height: 300px !important; }
   .no-changes { min-height: 170px; }
 }
@@ -1328,7 +1330,7 @@ textarea:disabled {
   .tracker-heading { padding: 19px 17px 15px; }
   .filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 13px 17px; }
   .search-field { grid-column: span 2; }
-  .lower-grid { grid-template-columns: 1fr; }
+  .lower-grid { grid-template-columns: minmax(0, 1fr); }
   .changes-panel { grid-column: auto; }
   .lower-grid .panel { min-height: auto; }
   footer { flex-direction: column; }
@@ -1338,6 +1340,7 @@ textarea:disabled {
 
 @media (max-width: 620px) {
   .brand-mark { width: 38px; height: 38px; }
+  .section-heading.compact { flex-wrap: wrap; gap: 10px; }
   .topbar h1 { max-width: 210px; font-size: 15px; line-height: 1.15; }
   .storage-indicator { display: none; }
   .mission-card { flex-direction: column; gap: 22px; padding: 22px; }
