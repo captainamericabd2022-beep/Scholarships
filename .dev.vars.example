@@ -1,0 +1,8 @@
+# Copy to .dev.vars for private local Cloudflare settings. Never commit .dev.vars.
+# Leave OWNER_EMAIL empty for the local owner preview.
+OWNER_EMAIL=
+OWNER_PROFILE_JSON={"country":"Not set","degree":"CSE","intake":"Not set","cgpa":"Not set","graduation":"Not set","ieltsTarget":"Not set","priority":"Full funding"}
+RESEND_API_KEY=
+REMINDER_FROM_EMAIL=CSE Scholarship Command Center <onboarding@resend.dev>
+REMINDER_VERIFIED_DOMAIN=false
+REMINDER_SITE_URL=http://localhost:3000/
