@@ -18,7 +18,8 @@ export async function GET(request: Request) {
     const result = await withJobLease(WATCH_JOB, async () => {
       const userId = ownerDataKey(owner);
       let refresh: Awaited<ReturnType<typeof refreshOfficialSources>> | { error: string };
-      try { refresh = await refreshOfficialSources(userId, { limit: 60 }); }
+      // Scheduled runs collect fresh evidence even after a recent browser visit.
+      try { refresh = await refreshOfficialSources(userId, { force: true, limit: 60 }); }
       catch (error) { refresh = { error: error instanceof Error ? error.message : "Source refresh failed" }; }
       // Deadline catch-up must still run if a source is temporarily unavailable.
       const reminders = await dispatchReminders(userId);

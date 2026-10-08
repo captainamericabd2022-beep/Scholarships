@@ -29,6 +29,15 @@ test("countdown uses Asia/Dhaka calendar date", () => {
   assert.equal(daysUntilDateKey("2027-01-03", new Date("2027-01-01T23:30:00Z")), 1);
 });
 
+test("a delayed due-date check catches the last unsent interval without due-day opt-in", () => {
+  const events = eventsForPreferences(buildReminderEvents([target], [], new Date("2027-01-10T03:00:00Z")), preferences);
+  const pending = selectCatchUpEvents(events, new Set());
+  assert.equal(pending.length, 1);
+  assert.equal(pending[0].daysRemaining, 0);
+  assert.equal(pending[0].reminderThreshold, 1);
+  assert.deepEqual(selectCatchUpEvents(events, new Set([pending[0].key])), []);
+});
+
 test("official-source parser detects monitored evidence and ambiguous portals", () => {
   const html = `<title>MSc Artificial Intelligence</title><p>This is a fully funded scholarship covering tuition fees and a monthly stipend.</p><p>Bangladeshi applicants are eligible.</p><p>IELTS 7.0 is required.</p><p>No work experience required.</p><a href="https://official.example/apply">Apply now</a><a href="https://official.example/portal">Application portal</a>`;
   const text = "This is a fully funded scholarship covering tuition fees and a monthly stipend. Bangladeshi applicants are eligible. IELTS 7.0 is required. No work experience required.";

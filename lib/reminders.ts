@@ -111,9 +111,7 @@ export function buildReminderEvents(
       if (days === null || days < 0 || days > 60) continue;
       const action = kind === "opening-reminder" ? "applications open" : "application deadline";
       const timing = days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`;
-      const crossedThresholds = days === 0
-        ? [0]
-        : ALLOWED_REMINDER_THRESHOLDS.filter((threshold) => threshold > 0 && threshold >= days);
+      const crossedThresholds = ALLOWED_REMINDER_THRESHOLDS.filter((threshold) => threshold >= days);
       for (const threshold of crossedThresholds) {
         events.push({
           key: `${kind}:${scholarship.id}:${date}:t${threshold}`,
