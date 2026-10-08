@@ -60,6 +60,14 @@ The current online launch uses Clerk development authentication and is labelled 
 
 Source refresh runs when the owner visits or manually checks. An unattended watch must be pointed at the new Vercel URL and tested separately; this repository does not claim a connected scheduler. Keep the existing watch rather than creating a duplicate. Email is unavailable until the sender is configured and tested. Never claim delivery without a recorded successful send.
 
+### Email connection
+
+Set `RESEND_API_KEY` as a Vercel production **Secret**, not a browser-public variable. Configure the sender and dashboard URL, then redeploy; environment changes do not modify already-running deployments. A Resend Sending-access key is sufficient for sending. `scripts/check-email-provider.mjs` is a read-only domain check: a `restricted_api_key` response may mean Sending-only permissions, not an expired key. Verify sending with the authenticated Reminders test button.
+
+For `onboarding@resend.dev`, keep `REMINDER_VERIFIED_DOMAIN=false` and ensure `OWNER_EMAIL` is the Resend account email. Test emails go to that owner even when a co-administrator presses the button. Both administrators can see their shared delivery audit; ordinary viewers see only their own history. Test attempts are persisted as pending, failed or sent. `sent` means the provider returned a message ID, not guaranteed inbox delivery.
+
+For additional recipients, verify an owned domain in Resend, configure `REMINDER_FROM_EMAIL` on that domain and only then set `REMINDER_VERIFIED_DOMAIN=true`. Do not opt viewers into reminders on their behalf. Emails never include private profile, notes, assessments or application checklists.
+
 Explicit date signals from established official sources may update automatically. Heuristic text snippets for funding, eligibility, English, work experience, portals and programmes require administrator review before replacing verified facts. Application years never redefine intake years. Retracted extractions stay in the audit log but are excluded from verified-change alerts.
 
 ## Privacy and verification

@@ -207,7 +207,9 @@ export function renderReminderEmail(events: ReminderEvent[], siteUrl: string) {
 export async function emailProviderStatus(): Promise<EmailProviderStatus> {
   const values = process.env;
   const from = (values.REMINDER_FROM_EMAIL ?? "").trim();
-  return { configured: Boolean(values.RESEND_API_KEY?.trim() && from), provider: "Resend", from, senderScope: values.REMINDER_VERIFIED_DOMAIN?.trim().toLowerCase() === "true" ? "multi-user" : "owner-only" };
+  // Setting a flag cannot turn Resend's testing sender into a verified domain.
+  const testingSender = /@resend\.dev\s*>?\s*$/i.test(from);
+  return { configured: Boolean(values.RESEND_API_KEY?.trim() && from), provider: "Resend", from, senderScope: values.REMINDER_VERIFIED_DOMAIN?.trim().toLowerCase() === "true" && !testingSender ? "multi-user" : "owner-only" };
 }
 
 export async function sendReminderEmail(args: {
@@ -229,6 +231,7 @@ export async function sendReminderEmail(args: {
       "idempotency-key": args.idempotencyKey,
     },
     body: JSON.stringify({ from, to: [args.to], subject: args.subject, html: args.html, text: args.text }),
+    signal: AbortSignal.timeout(25_000),
   });
   const payload = (await response.json().catch(() => ({}))) as { id?: string; message?: string; name?: string };
   if (!response.ok || !payload.id) {

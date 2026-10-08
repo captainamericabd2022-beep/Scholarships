@@ -1,4 +1,5 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { deliveryHistoryRecipients, sendWithDeliveryAudit, testEmailRecipient } from "../../../lib/email-delivery";
 import { getDb } from "../../../db";
 import { listManualEdits } from "../../../db/manual-edits";
 import { applyManualEdit } from "../../../lib/scholarship-edits";
@@ -149,8 +150,10 @@ export async function GET(request: Request) {
     const preferences = await ensurePreferences(user.email, user.userId, user.isOwner);
     const provider = await emailProviderStatus();
     const db = getDb();
+    const historyScope = inArray(notificationDeliveries.recipientEmail, deliveryHistoryRecipients(user.isOwner, user.email, configuredAdministratorEmails()));
     const recentDeliveries = await db
       .select({
+        recipientEmail: notificationDeliveries.recipientEmail,
         subject: notificationDeliveries.subject,
         status: notificationDeliveries.status,
         attemptedAt: notificationDeliveries.attemptedAt,
@@ -158,16 +161,16 @@ export async function GET(request: Request) {
         error: notificationDeliveries.error,
       })
       .from(notificationDeliveries)
-      .where(eq(notificationDeliveries.recipientEmail, user.email))
+      .where(historyScope)
       .orderBy(desc(notificationDeliveries.attemptedAt))
       .limit(8);
     const [latestRun] = await db.select().from(monitorRuns).where(eq(monitorRuns.userId, user.userId)).orderBy(desc(monitorRuns.completedAt)).limit(1);
     const pendingReviews = user.isOwner ? await db.select({ id: sourceReviewQueue.id }).from(sourceReviewQueue).where(and(eq(sourceReviewQueue.userId, user.userId), eq(sourceReviewQueue.status, "pending"))) : [];
-    const [lastSuccessful] = await db.select({ sentAt: notificationDeliveries.sentAt }).from(notificationDeliveries).where(and(eq(notificationDeliveries.recipientEmail, user.email), eq(notificationDeliveries.status, "sent"))).orderBy(desc(notificationDeliveries.sentAt)).limit(1);
+    const [lastSuccessful] = await db.select({ sentAt: notificationDeliveries.sentAt }).from(notificationDeliveries).where(and(historyScope, eq(notificationDeliveries.status, "sent"))).orderBy(desc(notificationDeliveries.sentAt)).limit(1);
     const failedDeliveries = recentDeliveries.filter((delivery) => delivery.status === "failed").length;
     return privateJson({
       preferences: rowPreferences(preferences),
-      provider: { configured: provider.configured, name: provider.provider, senderScope: provider.senderScope },
+      provider: { configured: provider.configured, name: provider.provider, senderScope: provider.senderScope, testRecipient: user.isOwner ? testEmailRecipient(provider.senderScope, await configuredOwnerEmail(), user.email) : undefined },
       recentDeliveries,
       health: {
         lastAutomaticCheck: latestRun?.completedAt ?? "",
@@ -233,26 +236,36 @@ export async function POST(request: Request) {
     const provider = await emailProviderStatus();
     if (payload.action === "test") {
       if (!provider.configured) {
-        return privateJson({ error: "Email sending is not connected yet. Add an authenticated Resend API key and verified sender address before a test can be delivered." }, { status: 503 });
+        return privateJson({ error: "Email sending is not configured. Add RESEND_API_KEY and REMINDER_FROM_EMAIL in Vercel production, then redeploy." }, { status: 503 });
       }
+      const recipient = testEmailRecipient(provider.senderScope, await configuredOwnerEmail(), user.email);
+      if (!recipient) return privateJson({ error: "The primary test recipient is not configured." }, { status: 503 });
+      const eventKey = `test:${crypto.randomUUID()}`;
       const email = renderReminderEmail([{
-        key: `test:${Date.now()}`,
+        key: eventKey,
         type: "deadline-reminder",
         scholarshipId: "test",
         scholarshipName: "Test reminder",
-        title: "Your scholarship reminders are connected",
+        title: "Scholarship email connection test",
         detail: "This is a delivery test. Future messages contain only official scholarship facts and dates.",
         sourceUrl: "",
         daysRemaining: 7,
         reminderThreshold: 7,
         date: null,
       }], await reminderSiteUrl());
-      const providerId = await sendReminderEmail({
-        to: user.email,
-        ...email,
-        idempotencyKey: await idempotencyKey(user.email, [`test:${Date.now()}`]),
-      });
-      return privateJson({ ok: true, sent: 1, providerId, message: `Test email sent to ${user.email}.` });
+      const db = getDb();
+      const key = await idempotencyKey(recipient, [eventKey]);
+      try {
+        const providerId = await sendWithDeliveryAudit(
+          () => sendReminderEmail({ to: recipient, ...email, subject: "Scholarship email connection test", idempotencyKey: key }),
+          async (attempt) => {
+            await db.insert(notificationDeliveries).values({ recipientEmail: recipient, eventKey, eventType: "test", scholarshipId: "test", subject: "Scholarship email connection test", ...attempt }).onConflictDoUpdate({ target: [notificationDeliveries.recipientEmail, notificationDeliveries.eventKey], set: attempt });
+          },
+        );
+        return privateJson({ ok: true, sent: 1, providerId, message: `Resend accepted the test email to ${recipient}; recorded as sent. Check your inbox or spam folder.` });
+      } catch (error) {
+        return privateJson({ error: error instanceof Error ? error.message : "Test email failed. Check delivery history." }, { status: 502 });
+      }
     }
 
     const db = getDb();

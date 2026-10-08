@@ -15,6 +15,7 @@ type Preferences = {
 };
 
 type Delivery = {
+  recipientEmail: string;
   subject: string;
   status: string;
   attemptedAt: string;
@@ -24,7 +25,7 @@ type Delivery = {
 
 type SettingsPayload = {
   preferences?: Preferences;
-  provider?: { configured: boolean; name: string; senderScope?: "owner-only" | "multi-user" };
+  provider?: { configured: boolean; name: string; senderScope?: "owner-only" | "multi-user"; testRecipient?: string };
   health?: { lastAutomaticCheck: string; nextScheduledCheck: string; lastSuccessfulEmail: string; failedDeliveries: number; sourcesRequiringReview: number; monitorStatus: string };
   recentDeliveries?: Delivery[];
   automaticCheck?: string;
@@ -44,6 +45,13 @@ function formatDate(value: string) {
     : "—";
 }
 
+function formatTimestamp(value: string) {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime())
+    ? `${new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Dhaka", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(date)} · Dhaka`
+    : "—";
+}
+
 export default function ReminderCenter({
   userEmail,
   isOwner,
@@ -58,7 +66,7 @@ export default function ReminderCenter({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [preferences, setPreferences] = useState<Preferences | null>(null);
-  const [provider, setProvider] = useState<{ configured: boolean; name: string; senderScope?: "owner-only" | "multi-user" }>({ configured: false, name: "Email provider" });
+  const [provider, setProvider] = useState<NonNullable<SettingsPayload["provider"]>>({ configured: false, name: "Email provider" });
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [health, setHealth] = useState<SettingsPayload["health"]>(undefined);
 
@@ -118,9 +126,10 @@ export default function ReminderCenter({
       const payload = (await response.json()) as SettingsPayload & { ok?: boolean };
       if (!response.ok || !payload.preferences) throw new Error(payload.error || "Preferences could not be saved.");
       setPreferences(payload.preferences);
-      setMessage(payload.preferences.isEnabled
-        ? "Email reminders are enabled for this address."
-        : "Email reminders are paused for this address.");
+      setMessage(!payload.preferences.isEnabled ? "Email reminders are paused for this address."
+        : !provider.configured ? "Preferences saved. Email setup is still required before sending."
+        : provider.senderScope === "owner-only" && provider.testRecipient !== payload.preferences.email ? "Preferences saved. This testing sender cannot deliver to additional addresses; a verified domain is required."
+        : "Preferences saved. Enabled reminders are sent only for previously-unsent, eligible events.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Preferences could not be saved.");
     } finally {
@@ -129,6 +138,7 @@ export default function ReminderCenter({
   }
 
   async function ownerAction(action: "dispatch" | "test") {
+    if (saving) return;
     setSaving(true);
     setMessage(action === "test" ? "Sending a private test email…" : "Checking for unsent reminders…");
     try {
@@ -138,12 +148,14 @@ export default function ReminderCenter({
         body: JSON.stringify({ action }),
       });
       const payload = (await response.json()) as { message?: string; error?: string };
-      if (!response.ok) throw new Error(payload.error || "Reminder check failed.");
+      if (!response.ok) throw new Error(payload.error || payload.message || "Reminder check failed.");
       const resultMessage = payload.message || "Reminder check complete.";
       await loadSettings();
       setMessage(resultMessage);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Reminder check failed.");
+      const failureMessage = error instanceof Error ? error.message : "Reminder check failed.";
+      await loadSettings();
+      setMessage(failureMessage);
     } finally {
       setSaving(false);
     }
@@ -165,17 +177,17 @@ export default function ReminderCenter({
           <div className="reminder-scroll">
           <div className={`provider-banner provider-${provider.configured ? "ready" : "setup"}`}>
             <span aria-hidden="true">{provider.configured ? "●" : "○"}</span>
-            <div><strong>{provider.configured ? `${provider.name} connected` : "Email delivery needs connection"}</strong><p>{provider.configured ? "Automatic messages can be delivered and deduplicated." : "Your settings are saved now; messages will not be claimed as sent until an authenticated provider is connected."}</p></div>
+            <div><strong>{provider.configured ? `${provider.name} ${health?.lastSuccessfulEmail ? "sending tested" : "configured · test needed"}` : "Email delivery needs connection"}</strong><p>{provider.configured ? "A message is recorded as sent only after Resend accepts it. Inbox delivery is not guaranteed by that status." : "Your preferences are saved. A server-side Resend key and sender must be configured in Vercel before messages can be sent."}</p></div>
           </div>
-          {provider.configured && provider.senderScope === "owner-only" ? <div className="sender-domain-notice"><strong>Owner-only test sender</strong><p>Resend’s testing domain can deliver only to the owner. Verify a sending domain and set <code>REMINDER_VERIFIED_DOMAIN=true</code> to enable invited-user delivery.</p><a href="https://resend.com/docs/dashboard/domains/introduction" target="_blank" rel="noreferrer">Set up a verified domain ↗</a></div> : null}
+          {provider.configured && provider.senderScope === "owner-only" ? <div className="sender-domain-notice"><strong>Owner-only testing sender</strong><p>Resend’s testing domain sends only to the Resend account email. {isOwner && provider.testRecipient ? `Test recipient: ${provider.testRecipient}. ` : ""}Delivery to other administrators and invited users requires a verified domain and a sender on that domain.</p><a href="https://resend.com/docs/knowledge-base/403-error-resend-dev-domain" target="_blank" rel="noreferrer">Sending-domain requirements ↗</a></div> : null}
 
           <section className="reminder-health" aria-label="Reminder health">
             <div className="reminder-section-title"><div><p className="eyebrow">SYSTEM HEALTH</p><h3>Reminder health</h3></div><span className={`health-dot health-${health?.monitorStatus ?? "not-run"}`}>●</span></div>
             <div className="health-grid">
-              <div><span>Last automatic check</span><strong>{health?.lastAutomaticCheck ? formatDate(health.lastAutomaticCheck) : "Not run yet"}</strong></div>
-              <div><span>Next scheduled check</span><strong>{health?.nextScheduledCheck ? formatDate(health.nextScheduledCheck) : "Watch reconnection pending"}</strong></div>
-              <div><span>Last successful email</span><strong>{health?.lastSuccessfulEmail ? formatDate(health.lastSuccessfulEmail) : "None yet"}</strong></div>
-              <div><span>Failed deliveries</span><strong>{health?.failedDeliveries ?? 0}</strong></div>
+              <div><span>Last automatic check</span><strong>{health?.lastAutomaticCheck ? formatTimestamp(health.lastAutomaticCheck) : "Not run yet"}</strong></div>
+              <div><span>Next scheduled check</span><strong>{health?.nextScheduledCheck ? formatTimestamp(health.nextScheduledCheck) : "Watch reconnection pending"}</strong></div>
+              <div><span>Last provider-accepted email</span><strong>{health?.lastSuccessfulEmail ? formatTimestamp(health.lastSuccessfulEmail) : "None yet"}</strong></div>
+              <div><span>Failed attempts in recent history</span><strong>{health?.failedDeliveries ?? 0}</strong></div>
               <div><span>Sources requiring review</span><strong>{health?.sourcesRequiringReview ?? 0}</strong></div>
             </div>
           </section>
@@ -200,7 +212,7 @@ export default function ReminderCenter({
 
           {isOwner ? <section className="reminder-owner-tools"><div><p className="eyebrow">OWNER CONTROLS</p><h3>Delivery check</h3><p>Every owner source refresh checks this queue. Your existing scholarship watch can trigger it by opening the dashboard.</p></div><div><button type="button" disabled={saving} onClick={() => ownerAction("dispatch")}>Check & send now</button><button type="button" disabled={saving} onClick={() => ownerAction("test")}>{provider.configured ? "Send test email" : "Test email setup"}</button></div></section> : null}
 
-          <section className="delivery-history"><div className="reminder-section-title"><div><p className="eyebrow">DELIVERY HISTORY</p><h3>Recent messages</h3></div></div>{deliveries.length ? deliveries.map((delivery, index) => <article key={`${delivery.attemptedAt}-${index}`}><span className={`delivery-status delivery-${delivery.status}`}>{delivery.status}</span><div><strong>{delivery.subject}</strong><small>{formatDate(delivery.sentAt || delivery.attemptedAt)}{delivery.error ? ` · ${delivery.error}` : ""}</small></div></article>) : <p className="empty-copy">No reminder emails have been sent to this address yet.</p>}</section>
+          <section className="delivery-history"><div className="reminder-section-title"><div><p className="eyebrow">DELIVERY HISTORY</p><h3>Recent messages</h3></div></div>{deliveries.length ? deliveries.map((delivery, index) => <article key={`${delivery.attemptedAt}-${index}`}><span className={`delivery-status delivery-${delivery.status}`}>{delivery.status}</span><div><strong>{delivery.subject}</strong><small>{isOwner ? `To ${delivery.recipientEmail} · ` : ""}{formatTimestamp(delivery.sentAt || delivery.attemptedAt)}{delivery.error ? ` · ${delivery.error}` : ""}</small></div></article>) : <p className="empty-copy">No recorded email attempts {isOwner ? "for the administrators" : "for this address"} yet.</p>}</section>
           </div>
           <div className="reminder-footer"><button className="quiet-button" type="button" onClick={() => setOpen(false)}>Close</button><button className="save-reminders" form="reminder-settings-form" type="submit" disabled={!preferences || saving || loading}>{saving ? "Saving…" : "Save settings"}</button></div>
         </aside>
