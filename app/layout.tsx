@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ClerkProvider } from "@clerk/nextjs";
 import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
@@ -32,6 +33,7 @@ export async function generateMetadata(): Promise<Metadata> {
       apple: [{ url: "/apple-touch-icon.png?v=2", sizes: "180x180", type: "image/png" }],
     },
     manifest: "/manifest.webmanifest",
+    robots: { index: false, follow: false },
     openGraph: {
       title: "CSE Scholarship Command Center",
       description: "Official sources, smart deadlines, and one private application workspace.",
@@ -56,7 +58,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <ClerkProvider signInUrl="/sign-in" signUpUrl="/sign-up">{children}</ClerkProvider>
       </body>
     </html>
   );

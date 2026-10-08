@@ -1,14 +1,15 @@
 import Dashboard from "./Dashboard";
+import { UserButton } from "@clerk/nextjs";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { viewerAccess } from "../db/schema";
-import { isAuthorizedOwner, requireChatGPTUser } from "./chatgpt-auth";
+import { isAuthorizedOwner, requireUser } from "./auth";
 import { readOwnerProfile } from "../lib/owner-profile";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const user = await requireChatGPTUser("/");
+  const user = await requireUser();
   const isOwner = await isAuthorizedOwner(user.email);
   let isViewer = false;
   if (!isOwner) {
@@ -32,7 +33,7 @@ export default async function Home() {
           <p>PRIVATE COMMAND CENTER</p>
           <h1>This account is not authorized.</h1>
           <p>Ask the dashboard owner to allow this email, or sign in with an authorized account.</p>
-          <a href="/signout-with-chatgpt?return_to=/">Sign out</a>
+          <UserButton />
         </section>
       </main>
     );

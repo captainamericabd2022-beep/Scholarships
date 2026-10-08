@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+.login-shell { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, 1fr); align-items: center; gap: 48px; padding: clamp(24px, 6vw, 96px); background: radial-gradient(ellipse at 18% 20%, #173f3655, transparent 60%), #081410; color: #eaf7f0; }
+.login-intro { max-width: 620px; }
+.login-mark { width: 64px; height: 64px; display: grid; place-items: center; border: 1px solid #7cdfad66; border-radius: 20px; color: #b2ed97; font-weight: 800; font-size: 24px; margin-bottom: 48px; background: #28504344; }
+.login-intro h1 { font-size: clamp(34px, 4.5vw, 64px); line-height: 1.08; letter-spacing: -.055em; margin: 18px 0 24px; }
+.login-intro h1 span { color: #b2ed97; }
+.login-intro > p:not(.eyebrow) { color: #acbeb3; line-height: 1.7; max-width: 500px; }
+.login-privacy { margin-top: 32px; color: #c5d5cb; font-size: 13px; }
+.preview-disclosure { font-size: 12px; margin-top: 24px; }
+.login-form { display: flex; justify-content: center; min-width: 0; }
+.login-form > div { max-width: 100%; }
+@media (max-width: 760px) { .login-shell { grid-template-columns: minmax(0, 1fr); gap: 24px; padding: 24px 16px; } .login-mark { margin-bottom: 24px; } .login-intro { margin: auto; max-width: 400px; } .login-intro h1 { font-size: 36px; } .login-privacy { margin-top: 16px; } .login-form { padding-bottom: 24px; } }
+
 :root,
 :root[data-theme="dark"] {
   --bg: #080c0f;

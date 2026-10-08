@@ -1,20 +1,24 @@
 {
-  "name": "site-creator-vinext-starter",
+  "name": "cse-scholarship-command-center",
   "version": "0.1.0",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "vinext dev",
-    "build": "vinext build",
-    "start": "vinext start",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
     "test": "npm run build && node --test tests/rendered-html.test.mjs && tsx --test tests/*.test.ts",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
-    "db:local": "wrangler d1 migrations apply DB --local --config wrangler.local.jsonc --persist-to .wrangler/state"
+    "db:migrate": "node --env-file=.env.local scripts/migrate-postgres.mjs",
+    "test:unit": "node --test tests/rendered-html.test.mjs && tsx --test tests/*.test.ts"
   },
   "dependencies": {
+    "next": "16.4.0",
+    "@clerk/nextjs": "7.9.12",
+    "@neondatabase/serverless": "1.2.0",
     "drizzle-orm": "0.45.2",
     "react": "19.2.6",
     "react-dom": "19.2.6"
@@ -38,6 +42,7 @@
     "react-server-dom-webpack": "19.2.6",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3",
+    "tsx": "4.23.15",
     "typescript-eslint": "8.59.3",
     "vinext": "1.0.0-beta.2",
     "vite": "8.0.13",

@@ -47,7 +47,7 @@ function privateJson(payload: unknown, init?: ResponseInit) {
 }
 
 export async function GET(request: Request) {
-  const identity = requestIdentity(request);
+  const identity = await requestIdentity(request);
   if (!identity) {
     return privateJson({ error: "Sign in is required." }, { status: 401 });
   }
@@ -148,7 +148,7 @@ export async function GET(request: Request) {
         return Number.isFinite(timestamp) && timestamp >= weekAgo;
       }).map((row) => ({ ...row, fieldChanges: safeJson(row.fieldChangesJson) })) : [],
       reviews: reviewRows.map((row) => ({ id: row.id, scholarshipId: row.scholarshipId, sourceUrl: row.sourceUrl, reason: row.reason, candidatePatch: safeJson(row.candidatePatchJson), fieldChanges: JSON.parse(row.fieldChangesJson), createdAt: row.createdAt })),
-      storage: isOwner ? "Cloudflare D1" : "Shared read-only view",
+      storage: isOwner ? "Neon Postgres" : "Shared read-only view",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Dashboard data unavailable";

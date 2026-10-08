@@ -78,7 +78,7 @@ export async function POST(request: Request) {
         .where(eq(userScholarshipTracking.userId, userId)),
     ]);
     const updatedScholarships = updateRows
-      .map((row) => ({ id: row.scholarshipId, ...safeJson(row.patchJson) }))
+      .map((row): Record<string, unknown> => ({ id: row.scholarshipId, ...safeJson(row.patchJson) }))
       .filter((item) => typeof item.name === "string") as unknown as Scholarship[];
     const trackedScholarships = trackingRows
       .map((row) => ({ row, scholarship: safeJson(row.scholarshipJson) as unknown as Scholarship }))

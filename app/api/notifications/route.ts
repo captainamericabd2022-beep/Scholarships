@@ -30,7 +30,7 @@ import {
   requestUserId,
 } from "../../../lib/request-auth";
 
-const LIVE_SITE_URL = "https://cse-scholarship-command-center.hkdoutdoorinnovation.chatgpt.site/";
+const LIVE_SITE_URL = "";
 
 function privateJson(payload: unknown, init?: ResponseInit) {
   const headers = new Headers(init?.headers);
@@ -54,19 +54,12 @@ function savedThresholds(value: string) {
   }
 }
 
-function nextDailyCheck(now = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  let candidate = new Date(Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day), 3, 0, 0));
-  if (candidate.getTime() <= now.getTime()) candidate = new Date(candidate.getTime() + 86_400_000);
-  return candidate.toISOString();
-}
 
 async function authorizedUser(request: Request) {
-  const identity = requestIdentity(request);
+  const identity = await requestIdentity(request);
   if (!identity) return null;
   const ownerUserId = await requestUserId(request);
-  if (ownerUserId) return { ...identity, isOwner: true };
+  if (ownerUserId) return { ...identity, userId: ownerUserId, isOwner: true };
   const [viewer] = await getDb()
     .select({ id: viewerAccess.id })
     .from(viewerAccess)
@@ -145,12 +138,7 @@ async function mergedScholarships() {
 }
 
 async function reminderSiteUrl() {
-  try {
-    const { env } = await import("cloudflare:workers");
-    return ((env as unknown as { REMINDER_SITE_URL?: string }).REMINDER_SITE_URL ?? LIVE_SITE_URL).trim();
-  } catch {
-    return process.env.REMINDER_SITE_URL?.trim() || LIVE_SITE_URL;
-  }
+  return process.env.REMINDER_SITE_URL?.trim() || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : LIVE_SITE_URL);
 }
 
 export async function GET(request: Request) {
@@ -182,13 +170,13 @@ export async function GET(request: Request) {
       recentDeliveries,
       health: {
         lastAutomaticCheck: latestRun?.completedAt ?? "",
-        nextScheduledCheck: nextDailyCheck(),
+        nextScheduledCheck: "",
         lastSuccessfulEmail: lastSuccessful?.sentAt ?? "",
         failedDeliveries,
         sourcesRequiringReview: pendingReviews.length,
         monitorStatus: latestRun?.status ?? "not-run",
       },
-      automaticCheck: "Checks after every owner source refresh. Your existing scheduled watch can trigger it by opening this dashboard.",
+      automaticCheck: "Checks after every owner source refresh. The existing scheduled watch must be pointed to this Vercel URL; no new schedule has been created.",
     });
   } catch (error) {
     return privateJson(

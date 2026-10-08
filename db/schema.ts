@@ -1,16 +1,16 @@
 import { sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { boolean, index, integer, pgTable, serial, text, uniqueIndex } from "drizzle-orm/pg-core";
 
-export const userProgress = sqliteTable(
+export const userProgress = pgTable(
   "user_progress",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     userId: text("user_id").notNull(),
     scholarshipId: text("scholarship_id").notNull(),
     status: text("status").notNull().default(""),
     notes: text("notes").notNull().default(""),
     checklistJson: text("checklist_json").notNull().default("{}"),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP::text)`),
   },
   (table) => [
     uniqueIndex("user_progress_user_scholarship_idx").on(
@@ -20,23 +20,23 @@ export const userProgress = sqliteTable(
   ],
 );
 
-export const scholarshipUpdates = sqliteTable(
+export const scholarshipUpdates = pgTable(
   "scholarship_updates",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     scholarshipId: text("scholarship_id").notNull(),
     patchJson: text("patch_json").notNull().default("{}"),
     sourceUrl: text("source_url").notNull(),
     verifiedAt: text("verified_at").notNull(),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP::text)`),
   },
   (table) => [
     uniqueIndex("scholarship_updates_scholarship_idx").on(table.scholarshipId),
   ],
 );
 
-export const changeLog = sqliteTable("change_log", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const changeLog = pgTable("change_log", {
+  id: serial("id").primaryKey(),
   scholarshipId: text("scholarship_id").notNull(),
   changeType: text("change_type").notNull(),
   summary: text("summary").notNull(),
@@ -44,11 +44,11 @@ export const changeLog = sqliteTable("change_log", {
   changedAt: text("changed_at").notNull(),
   verifiedAt: text("verified_at").notNull(),
   fieldChangesJson: text("field_changes_json").notNull().default("[]"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP::text)`),
 });
 
 // Owner corrections are an independent overlay, never a source-verification claim.
-export const scholarshipManualEdits = sqliteTable("scholarship_manual_edits", {
+export const scholarshipManualEdits = pgTable("scholarship_manual_edits", {
   scholarshipId: text("scholarship_id").primaryKey(),
   userId: text("user_id").notNull(),
   patchJson: text("patch_json").notNull().default("{}"),
@@ -56,10 +56,10 @@ export const scholarshipManualEdits = sqliteTable("scholarship_manual_edits", {
   updatedAt: text("updated_at").notNull(),
 });
 
-export const sourceReviewQueue = sqliteTable(
+export const sourceReviewQueue = pgTable(
   "source_review_queue",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     userId: text("user_id").notNull(),
     scholarshipId: text("scholarship_id").notNull(),
     sourceUrl: text("source_url").notNull(),
@@ -68,7 +68,7 @@ export const sourceReviewQueue = sqliteTable(
     fieldChangesJson: text("field_changes_json").notNull().default("[]"),
     reason: text("reason").notNull(),
     status: text("status").notNull().default("pending"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP::text)`),
     reviewedAt: text("reviewed_at").notNull().default(""),
   },
   (table) => [
@@ -77,10 +77,10 @@ export const sourceReviewQueue = sqliteTable(
   ],
 );
 
-export const monitorRuns = sqliteTable(
+export const monitorRuns = pgTable(
   "monitor_runs",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     userId: text("user_id").notNull(),
     startedAt: text("started_at").notNull(),
     completedAt: text("completed_at").notNull(),
@@ -94,18 +94,18 @@ export const monitorRuns = sqliteTable(
   (table) => [index("idx_monitor_runs_user_completed").on(table.userId, table.completedAt)],
 );
 
-export const userScholarshipTracking = sqliteTable(
+export const userScholarshipTracking = pgTable(
   "user_scholarship_tracking",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     userId: text("user_id").notNull(),
     scholarshipId: text("scholarship_id").notNull(),
     scholarshipJson: text("scholarship_json").notNull().default("{}"),
     discoveryInput: text("discovery_input").notNull().default(""),
     sourceUrl: text("source_url").notNull().default(""),
-    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP::text)`),
+    updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP::text)`),
   },
   (table) => [
     uniqueIndex("user_tracking_user_scholarship_idx").on(
@@ -116,10 +116,10 @@ export const userScholarshipTracking = sqliteTable(
   ],
 );
 
-export const scholarshipSourceChecks = sqliteTable(
+export const scholarshipSourceChecks = pgTable(
   "scholarship_source_checks",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     userId: text("user_id").notNull(),
     scholarshipId: text("scholarship_id").notNull(),
     sourceUrl: text("source_url").notNull(),
@@ -138,15 +138,15 @@ export const scholarshipSourceChecks = sqliteTable(
   ],
 );
 
-export const viewerAccess = sqliteTable(
+export const viewerAccess = pgTable(
   "viewer_access",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     email: text("email").notNull(),
-    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    isActive: boolean("is_active").notNull().default(true),
     invitedBy: text("invited_by").notNull(),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP::text)`),
+    updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP::text)`),
   },
   (table) => [
     uniqueIndex("viewer_access_email_idx").on(table.email),
@@ -154,19 +154,19 @@ export const viewerAccess = sqliteTable(
   ],
 );
 
-export const notificationPreferences = sqliteTable(
+export const notificationPreferences = pgTable(
   "notification_preferences",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     email: text("email").notNull(),
     userId: text("user_id").notNull().default(""),
-    isEnabled: integer("is_enabled", { mode: "boolean" }).notNull().default(false),
-    scholarshipChanges: integer("scholarship_changes", { mode: "boolean" }).notNull().default(true),
-    openingReminders: integer("opening_reminders", { mode: "boolean" }).notNull().default(true),
-    deadlineReminders: integer("deadline_reminders", { mode: "boolean" }).notNull().default(true),
+    isEnabled: boolean("is_enabled").notNull().default(false),
+    scholarshipChanges: boolean("scholarship_changes").notNull().default(true),
+    openingReminders: boolean("opening_reminders").notNull().default(true),
+    deadlineReminders: boolean("deadline_reminders").notNull().default(true),
     deadlineThresholdsJson: text("deadline_thresholds_json").notNull().default("[30,14,7,3,1]"),
-    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`(CURRENT_TIMESTAMP::text)`),
+    updatedAt: text("updated_at").notNull().default(sql`(CURRENT_TIMESTAMP::text)`),
   },
   (table) => [
     uniqueIndex("notification_preferences_email_idx").on(table.email),
@@ -174,10 +174,10 @@ export const notificationPreferences = sqliteTable(
   ],
 );
 
-export const notificationDeliveries = sqliteTable(
+export const notificationDeliveries = pgTable(
   "notification_deliveries",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     recipientEmail: text("recipient_email").notNull(),
     eventKey: text("event_key").notNull(),
     eventType: text("event_type").notNull(),

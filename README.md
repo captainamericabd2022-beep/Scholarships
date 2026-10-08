@@ -1,97 +1,75 @@
 # CSE Scholarship Command Center
 
-A responsive scholarship tracker for CSE and related master's programmes, built with React, TypeScript, Vinext, Cloudflare D1 and Drizzle.
-
-This source includes the latest owner scholarship editor and favicon fixes. Uploading this repository stores the source code; it does not deploy a working dashboard through GitHub Pages.
+A responsive scholarship tracker built with Next.js, Clerk, Neon Postgres and Drizzle, deployed using Vercel Functions. GitHub stores the source; GitHub Pages cannot run its authenticated server APIs.
 
 ## Features
 
-- Scholarship table with filters generated from the tracked data.
-- Official-source research and monitoring, with an owner review queue for ambiguous changes.
-- Owner-only scholarship edits, persistent manual overrides and concurrent-edit protection.
-- Private fit assessments, application statuses, notes and document checklists.
-- Viewer invitations and read-only scholarship access.
-- Deadline timelines, reminders with catch-up and duplicate prevention, and email delivery history.
-- ICS calendar, Google Calendar links, CSV/JSON backup and restore.
-- Dark/light themes, SVG/ICO favicons, mobile home-screen icons and a limited offline PWA view.
+- Scholarship filters, official-source monitoring and a review queue for ambiguous changes.
+- Owner-only editing, private assessments, notes, checklists and application statuses.
+- Owner-managed invitations; approved viewers receive shared scholarship facts, not the owner's profile or progress.
+- Deadline timeline, calendar exports, backup/restore, reminder catch-up and delivery history.
+- Responsive themes, favicons and a limited offline PWA view.
 
-## What is included
+## Run locally
 
-`app/` contains the UI and server routes; `lib/` contains scholarship seeds and monitoring/reminder logic; `db/` and `drizzle/` contain the schema and migrations. Tests, public assets, configuration, and the dependency lockfile are included.
-
-The original database, login cookies, API keys, build output, dependencies and Git history are excluded. The public seed file uses neutral fit assessments. Personal profile values are read only on the server from `OWNER_PROFILE_JSON` and passed only to the owner. Your original local project has not been changed.
-
-Scholarship facts retain their original verification dates. They are a seed snapshot; use the official-source refresh on a correctly configured deployment before relying on them.
-
-## Local development
-
-Requires Node.js 22.13.0 or later and npm.
+Requires Node.js 22.13 or later.
 
 ```bash
 npm ci
-npm run db:local
+vercel link
+vercel env pull .env.local
+npm run db:migrate
 npm run dev
 ```
 
-Open the Local URL printed by the server, normally `http://localhost:3000/`. Localhost provides an owner preview for development. The local database lives in ignored `.wrangler/` files and is separate from production.
+Authentication is required even on localhost. There is no identity-header or hostname bypass. Set `OWNER_EMAIL` to the verified primary email of the owner. Creating a Clerk account alone does not grant dashboard access.
 
-For private local configuration, copy `.dev.vars.example` to `.dev.vars` and fill in only the settings you need. Leave `OWNER_EMAIL` empty for the default local preview. Keep `RESEND_API_KEY` empty while testing if you do not want to send emails.
+On Windows machines where direct Node HTTP connections are blocked but Windows HTTP works, the database migration/import scripts support the explicit local-only `CSE_WINDOWS_TRANSPORT=1` fallback. This is not enabled in deployed functions.
 
-```bash
-npm test
-npm run lint
-npm run build
-```
+## Deployment configuration
 
-The D1 integration test is optional and writes only to local test storage. With the dev server running, enable it using `CSE_TEST_ORIGIN=http://localhost:3000`. For PowerShell:
-
-```powershell
-$env:CSE_TEST_ORIGIN = "http://localhost:3000"
-npx tsx --test tests/scholarship-edits.integration.test.ts
-```
-
-## Production hosting
-
-This project uses the Sites dispatcher's trusted authentication headers and Sign in with ChatGPT routes. A production deployment requires a Cloudflare Workers-compatible runtime, a D1 database bound as `DB`, all included migrations, and a trusted authentication layer.
-
-The existing `.openai/hosting.json` retains the original Sites project association. Publishing there requires access to that Site's owning account/workspace. GitHub uploads do not grant that access.
-
-GitHub Pages is static hosting and cannot run these server APIs, authentication or D1 storage. Deployment to another provider requires adapting the authentication and database integration first. Never trust user-supplied identity headers on an ordinary public server.
-
-Configure these values as server secrets/settings, never in committed files:
+Connect the existing Clerk and Neon resources to the Vercel project. Required environment settings:
 
 | Setting | Purpose |
 | --- | --- |
-| `OWNER_EMAIL` | Email of the authenticated dashboard administrator. Required in production. |
-| `OWNER_PROFILE_JSON` | Optional private profile object: `country`, `degree`, `intake`, `cgpa`, `graduation`, `ieltsTarget`, `priority`. |
-| `RESEND_API_KEY` | Resend API key used only on the server. |
+| `DATABASE_URL` | Neon connection for application queries. |
+| `DATABASE_URL_UNPOOLED` | Direct connection used by the migration script. |
+| `CLERK_SECRET_KEY` | Server-only Clerk credential. |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk's intentionally public browser key. |
+| `OWNER_EMAIL` | Verified owner primary email; required for administrative access. |
+| `OWNER_PROFILE_JSON` | Server-only private profile object. Never use a `NEXT_PUBLIC_` prefix. |
+| `RESEND_API_KEY` | Optional server-only email credential. |
 | `REMINDER_FROM_EMAIL` | Approved sender address. |
-| `REMINDER_VERIFIED_DOMAIN` | Set to `true` only after the sending domain is verified. |
-| `REMINDER_SITE_URL` | Public URL used in reminder links. |
+| `REMINDER_VERIFIED_DOMAIN` | `true` only after verifying the sender domain. |
+| `REMINDER_SITE_URL` | Dashboard URL included in reminders. |
 
-The Resend testing sender is restricted to the account owner's recipient address. A verified sending domain is needed for reminders to invited users.
-
-Source refresh currently runs when the owner visits the dashboard or starts a manual check. This repository does not include a connected unattended scheduler. Set up and test a scheduled workflow separately if reminders must run while nobody visits.
-
-## Upload to your GitHub repository
-
-Destination: [captainamericabd2022-beep/Scholarships](https://github.com/captainamericabd2022-beep/Scholarships).
-
-In GitHub, choose **Add file → Upload files**, then drag the contents of this folder into the upload area. Include `.gitignore` and `.openai/`. Upload the extracted source files, not the ZIP as a single file.
-
-Or run these commands from this folder while signed into an account with write access:
+Run the Drizzle migrations in `drizzle-postgres/` before deploying. `scripts/import-local-data.mjs` can copy existing local SQLite records without overwriting destination rows. It requires an explicit source path and preserves the original file.
 
 ```bash
-git init
-git add .
-git commit -m "Add CSE Scholarship Command Center"
-git branch -M main
-git remote add origin https://github.com/captainamericabd2022-beep/Scholarships.git
-git push -u origin main
+npm run db:migrate
+npm run build
+npm run test:unit
+npm run lint
+vercel deploy --prod --skip-domain
+# Inspect and test the exact deployment before promoting its alias.
+vercel promote <verified-deployment-url>
 ```
 
-These commands assume the destination repository is empty. If it has acquired commits, fetch and inspect them before pushing; do not force-push.
+The current online launch uses Clerk development authentication and is labelled a preview. Configure an owned domain and Clerk production credentials before treating it as a permanent production service.
 
-## License
+Source refresh runs when the owner visits or manually checks. An unattended watch must be pointed at the new Vercel URL and tested separately; this repository does not claim a connected scheduler. Keep the existing watch rather than creating a duplicate. Email is unavailable until the sender is configured and tested. Never claim delivery without a recorded successful send.
 
-No license has been selected. Add a license only after deciding how others may use this source.
+## Privacy and verification
+
+Private profile values are server-only and passed only to the owner. Approved viewers receive sanitized facts. Notes and checklists are stored in Neon, not bundled into public assets. Seeds retain their original verification dates; do not treat historical dates as current deadlines without an official-source check.
+
+Environment files, API keys, SQLite databases, build outputs and login cookies must not be committed. The original `.openai/hosting.json` association is retained for historical source compatibility, but excluded from Vercel deployments. The active Vercel app does not depend on Sites authentication or D1.
+
+```bash
+npm run test:unit
+npm run lint
+```
+
+The legacy D1 integration test is skipped unless explicitly configured; it is not evidence of Postgres verification. The database smoke test can be run separately with `node --env-file=.env.local --import=tsx scripts/verify-database.ts`. It creates isolated fixtures and removes only those fixtures after the check.
+
+No source license has been selected.

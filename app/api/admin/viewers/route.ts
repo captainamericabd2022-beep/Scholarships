@@ -34,7 +34,7 @@ async function activeViewers() {
 
 async function requireOwner(request: Request) {
   const ownerId = await requestUserId(request);
-  const identity = requestIdentity(request);
+  const identity = await requestIdentity(request);
   return ownerId && identity ? identity : null;
 }
 

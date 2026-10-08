@@ -204,13 +204,7 @@ export function renderReminderEmail(events: ReminderEvent[], siteUrl: string) {
 }
 
 export async function emailProviderStatus(): Promise<EmailProviderStatus> {
-  let values: { RESEND_API_KEY?: string; REMINDER_FROM_EMAIL?: string; REMINDER_VERIFIED_DOMAIN?: string } = {};
-  try {
-    const { env } = await import("cloudflare:workers");
-    values = env as unknown as typeof values;
-  } catch {
-    values = process.env;
-  }
+  const values = process.env;
   const from = (values.REMINDER_FROM_EMAIL ?? "").trim();
   return { configured: Boolean(values.RESEND_API_KEY?.trim() && from), provider: "Resend", from, senderScope: values.REMINDER_VERIFIED_DOMAIN?.trim().toLowerCase() === "true" ? "multi-user" : "owner-only" };
 }
@@ -222,13 +216,7 @@ export async function sendReminderEmail(args: {
   text: string;
   idempotencyKey: string;
 }) {
-  let values: { RESEND_API_KEY?: string; REMINDER_FROM_EMAIL?: string } = {};
-  try {
-    const { env } = await import("cloudflare:workers");
-    values = env as unknown as typeof values;
-  } catch {
-    values = process.env;
-  }
+  const values = process.env;
   const apiKey = values.RESEND_API_KEY?.trim();
   const from = values.REMINDER_FROM_EMAIL?.trim();
   if (!apiKey || !from) throw new Error("Email delivery is not connected yet.");

@@ -1,25 +1,24 @@
-import { env } from "cloudflare:workers";
+import { and, eq, sql } from "drizzle-orm";
+import { getDb } from "./index";
+import { scholarshipManualEdits } from "./schema";
 import type { Scholarship } from "../lib/scholarships";
 import type { ScholarshipEdit } from "../lib/scholarship-edits";
 
-type Row = { scholarship_id: string; patch_json: string; revision: number; updated_at: string };
-function decode(row: Row): ScholarshipEdit {
-  return { scholarshipId: row.scholarship_id, patch: JSON.parse(row.patch_json), revision: row.revision, updatedAt: row.updated_at };
+function decode(row: typeof scholarshipManualEdits.$inferSelect): ScholarshipEdit {
+  return { scholarshipId: row.scholarshipId, patch: JSON.parse(row.patchJson), revision: row.revision, updatedAt: row.updatedAt };
 }
 export async function listManualEdits(): Promise<ScholarshipEdit[]> {
-  const { results } = await env.DB.prepare("SELECT scholarship_id, patch_json, revision, updated_at FROM scholarship_manual_edits").all<Row>();
-  return results.map(decode);
+  return (await getDb().select().from(scholarshipManualEdits)).map(decode);
 }
 export async function getManualEdit(id: string): Promise<ScholarshipEdit | null> {
-  const row = await env.DB.prepare("SELECT scholarship_id, patch_json, revision, updated_at FROM scholarship_manual_edits WHERE scholarship_id = ?").bind(id).first<Row>();
+  const [row] = await getDb().select().from(scholarshipManualEdits).where(eq(scholarshipManualEdits.scholarshipId, id)).limit(1);
   return row ? decode(row) : null;
 }
 export async function saveManualEdit(id: string, userId: string, patch: Partial<Scholarship>, expectedRevision: number): Promise<ScholarshipEdit | null> {
-  const updatedAt = new Date().toISOString();
-  // Compare-and-swap prevents one open device from silently overwriting another.
-  const statement = expectedRevision === 0
-    ? env.DB.prepare("INSERT INTO scholarship_manual_edits (scholarship_id, user_id, patch_json, revision, updated_at) VALUES (?, ?, ?, 1, ?) ON CONFLICT (scholarship_id) DO NOTHING RETURNING scholarship_id, patch_json, revision, updated_at").bind(id, userId, JSON.stringify(patch), updatedAt)
-    : env.DB.prepare("UPDATE scholarship_manual_edits SET user_id = ?, patch_json = ?, revision = revision + 1, updated_at = ? WHERE scholarship_id = ? AND revision = ? RETURNING scholarship_id, patch_json, revision, updated_at").bind(userId, JSON.stringify(patch), updatedAt, id, expectedRevision);
-  const row = await statement.first<Row>();
+  const values = { userId, patchJson: JSON.stringify(patch), updatedAt: new Date().toISOString() };
+  // Single-statement compare-and-swap prevents device edits from clobbering each other.
+  const [row] = expectedRevision === 0
+    ? await getDb().insert(scholarshipManualEdits).values({ scholarshipId: id, ...values, revision: 1 }).onConflictDoNothing().returning()
+    : await getDb().update(scholarshipManualEdits).set({ ...values, revision: sql`${scholarshipManualEdits.revision} + 1` }).where(and(eq(scholarshipManualEdits.scholarshipId, id), eq(scholarshipManualEdits.revision, expectedRevision))).returning();
   return row ? decode(row) : null;
 }

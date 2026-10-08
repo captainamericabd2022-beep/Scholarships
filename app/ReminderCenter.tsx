@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { Scholarship } from "../lib/scholarships";
+import { daysUntilDateKey } from "../lib/reminders";
 
 type Preferences = {
   email: string;
@@ -32,11 +33,7 @@ type SettingsPayload = {
 const thresholdOptions = [60, 30, 14, 7, 3, 1, 0];
 
 function daysUntil(value: string | null) {
-  if (!value) return null;
-  const [year, month, day] = value.split("-").map(Number);
-  const now = new Date();
-  const current = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  return Math.round((Date.UTC(year, month - 1, day) - current) / 86_400_000);
+  return daysUntilDateKey(value);
 }
 
 function formatDate(value: string) {
@@ -67,7 +64,7 @@ export default function ReminderCenter({
   const upcoming = useMemo(() => scholarships.flatMap((item) => [
     item.opens ? { id: `${item.id}-opens`, name: item.shortName, kind: "opens", date: item.opens, days: daysUntil(item.opens) } : null,
     item.deadline ? { id: `${item.id}-deadline`, name: item.shortName, kind: "deadline", date: item.deadline, days: daysUntil(item.deadline) } : null,
-  ]).filter((item): item is NonNullable<typeof item> => Boolean(item && item.days !== null && item.days >= 0 && item.days <= 60))
+  ]).filter((item): item is NonNullable<typeof item> & { days: number } => Boolean(item && item.days !== null && item.days >= 0 && item.days <= 60))
     .sort((a, b) => a.days - b.days)
     .slice(0, 6), [scholarships]);
 
@@ -183,7 +180,7 @@ export default function ReminderCenter({
             <div className="reminder-section-title"><div><p className="eyebrow">SYSTEM HEALTH</p><h3>Reminder health</h3></div><span className={`health-dot health-${health?.monitorStatus ?? "not-run"}`}>●</span></div>
             <div className="health-grid">
               <div><span>Last automatic check</span><strong>{health?.lastAutomaticCheck ? formatDate(health.lastAutomaticCheck) : "Not run yet"}</strong></div>
-              <div><span>Next scheduled check</span><strong>{health?.nextScheduledCheck ? `${formatDate(health.nextScheduledCheck)} · 09:00 Dhaka` : "Daily · 09:00 Dhaka"}</strong></div>
+              <div><span>Next scheduled check</span><strong>{health?.nextScheduledCheck ? formatDate(health.nextScheduledCheck) : "Watch reconnection pending"}</strong></div>
               <div><span>Last successful email</span><strong>{health?.lastSuccessfulEmail ? formatDate(health.lastSuccessfulEmail) : "None yet"}</strong></div>
               <div><span>Failed deliveries</span><strong>{health?.failedDeliveries ?? 0}</strong></div>
               <div><span>Sources requiring review</span><strong>{health?.sourcesRequiringReview ?? 0}</strong></div>

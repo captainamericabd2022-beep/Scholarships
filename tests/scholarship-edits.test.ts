@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { applyManualEdit, editableFields, nextManualPatch, publicManualPatch, validateManualPatch, validateResetFields } from "../lib/scholarship-edits";
 import { scholarships } from "../lib/scholarships";
 import { buildReminderEvents } from "../lib/reminders";
-import { requestUserId } from "../lib/request-auth";
+import { identityFromVerifiedAccount, isOwnerEmail, ownerDataKey, sameOriginMutation } from "../lib/auth-policy";
 
 test("manual fields are validated; dates may be cleared without inventing deadlines", () => {
   assert.deepEqual(validateManualPatch({ deadline: "", opens: null, intakes: ["2035", "2035", "2036"], areas: ["AI", " ML "] }), { deadline: null, opens: null, intakes: ["2035", "2036"], areas: ["AI", "ML"] });
@@ -33,15 +33,19 @@ test("shared corrections never expose the owner assessment or private notes", ()
   assert.equal(patch.notes, "Private");
 });
 
-test("only the configured owner can edit on a hosted request", async () => {
-  const previous = process.env.OWNER_EMAIL;
-  process.env.OWNER_EMAIL = "owner@example.com";
-  try {
-    const request = (email?: string) => new Request("https://dashboard.example/api/scholarship-edits", { headers: email ? { "oai-authenticated-user-id": "account", "oai-authenticated-user-email": email } : {} });
-    assert.equal(await requestUserId(request()), null);
-    assert.equal(await requestUserId(request("viewer@example.com")), null);
-    assert.equal(await requestUserId(request("OWNER@example.com")), "account");
-  } finally { if (previous === undefined) delete process.env.OWNER_EMAIL; else process.env.OWNER_EMAIL = previous; }
+test("owner access requires a verified primary email, never supplied headers", async () => {
+  const account = { id: "account", primaryEmailAddressId: "primary", fullName: null, emailAddresses: [{ id: "primary", emailAddress: "OWNER@example.com", verification: { status: "verified" } }] };
+  const identity = identityFromVerifiedAccount(account);
+  assert.equal(identity?.email, "owner@example.com");
+  assert.equal(isOwnerEmail(identity!.email, "owner@example.com"), true);
+  assert.equal(isOwnerEmail("viewer@example.com", "owner@example.com"), false);
+  assert.equal(isOwnerEmail("owner@example.com", undefined), false);
+  assert.equal(identityFromVerifiedAccount({ ...account, emailAddresses: [{ ...account.emailAddresses[0], verification: { status: "unverified" } }] }), null);
+  assert.equal(ownerDataKey(identity!.email), "owner:owner@example.com");
+  assert.equal(sameOriginMutation(new Request("https://dashboard.example/api/progress", { method: "POST", headers: { origin: "https://evil.example" } })), false);
+  const source = await readFile(new URL("../lib/request-auth.ts", import.meta.url), "utf8");
+  assert.match(source, /verifiedSession/);
+  assert.doesNotMatch(source.replace(/\/\/[^\n]*/g, ""), /oai-authenticated|local-preview|localhost/);
 });
 
 test("reminder event calculations use the effective owner-entered deadline", () => {

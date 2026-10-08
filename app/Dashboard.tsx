@@ -1,4 +1,5 @@
 "use client";
+import { UserButton } from "@clerk/nextjs";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
@@ -781,7 +782,7 @@ export default function Dashboard({
   function inviteMailto(email: string) {
     const subject = encodeURIComponent("Your CSE Scholarship Command Center access");
     const body = encodeURIComponent(
-      `You can view the shared CSE Scholarship Command Center here:\n\n${window.location.origin}\n\nSign in with the ChatGPT account linked to ${email}. Personal profile, fit assessments, notes and application progress are hidden from viewers.`,
+      `You can view the shared CSE Scholarship Command Center here:\n\n${window.location.origin}\n\nSign in with Google or a verified account using ${email}. Personal profile, fit assessments, notes and application progress are hidden from viewers.`,
     );
     return `mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
   }
@@ -825,7 +826,7 @@ export default function Dashboard({
             <div><strong>{userName}</strong><small>{isOwner ? "Access administrator" : "Read-only viewer"}</small></div>
           </div>
           <button className="icon-button" type="button" onClick={updateTheme} aria-label="Toggle color theme">{theme === "dark" ? "☀" : "☾"}</button>
-          <a className="signout-link" href="/signout-with-chatgpt?return_to=/">Sign out</a>
+          <UserButton />
         </div>
       </header>
 
@@ -924,7 +925,7 @@ export default function Dashboard({
       {isOwner && accessOpen ? <div className="access-panel-layer">
         <button className="drawer-backdrop" type="button" aria-label="Close access administration" onClick={() => setAccessOpen(false)}/>
         <aside className="access-panel" role="dialog" aria-modal="true" aria-labelledby="access-title">
-          <div className="access-panel-header"><div><p className="eyebrow">OWNER ADMINISTRATION</p><h2 id="access-title">Viewer access</h2><p>Allow a Google-linked ChatGPT email to see scholarship facts. Personal profile and application data remain owner-only.</p></div><button type="button" className="close-button" onClick={() => setAccessOpen(false)} aria-label="Close access administration">×</button></div>
+          <div className="access-panel-header"><div><p className="eyebrow">OWNER ADMINISTRATION</p><h2 id="access-title">Viewer access</h2><p>Allow a verified email to see scholarship facts. Personal profile and application data remain owner-only.</p></div><button type="button" className="close-button" onClick={() => setAccessOpen(false)} aria-label="Close access administration">×</button></div>
           <form className="viewer-add-form" onSubmit={addViewer}>
             <label><span>Viewer email</span><input type="email" value={viewerEmail} onChange={(event) => setViewerEmail(event.target.value)} placeholder="student@example.com" autoComplete="email"/></label>
             <button type="submit" disabled={accessBusy || !viewerEmail.trim()}>{accessBusy ? "Updating…" : "Allow viewer"}</button>
