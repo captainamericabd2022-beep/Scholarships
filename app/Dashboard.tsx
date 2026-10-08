@@ -10,6 +10,8 @@ import type {
 import ReminderCenter from "./ReminderCenter";
 import DataPortability from "./DataPortability";
 import ScholarshipEditor from "./ScholarshipEditor";
+import ModalLayer from "./ModalLayer";
+import ScholarshipLogo from "./ScholarshipLogo";
 import { applyManualEdit, type ScholarshipEdit } from "../lib/scholarship-edits";
 
 const checklistItems = [
@@ -898,7 +900,7 @@ export default function Dashboard({
                 const rowStatus = effectiveStatus(item, progress[item.id]);
                 const check = sourceCheckById.get(item.id);
                 return <tr className={!item.active ? "row-archived" : ""} key={item.id} onClick={() => setSelectedId(item.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedId(item.id); }} tabIndex={0} role="button" aria-label={`Open ${item.name} details`}>
-                  <td data-label="Scholarship"><div className="scholarship-name"><span className={`source-mark source-mark-${check?.outcome ?? "idle"}`}>{item.sourceTag.slice(0, 3).toUpperCase()}</span><div><strong>{item.shortName}</strong><span>{isOwner && item.trackingOrigin === "personal" ? "Added by you · " : ""}{item.programme}</span>{isOwner ? <button className="scholarship-edit-link" type="button" aria-label={`Edit ${item.name}`} onKeyDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); setSelectedId(item.id); setEditingId(item.id); setEditMessage(""); }}>✎ Edit scholarship</button> : null}</div></div></td>
+                  <td data-label="Scholarship"><div className="scholarship-name"><ScholarshipLogo id={item.id} fallback={item.sourceTag} outcome={check?.outcome} /><div><strong>{item.shortName}</strong><span>{isOwner && item.trackingOrigin === "personal" ? "Added by you · " : ""}{item.programme}</span>{isOwner ? <button className="scholarship-edit-link" type="button" aria-label={`Edit ${item.name}`} onKeyDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); setSelectedId(item.id); setEditingId(item.id); setEditMessage(""); }}>✎ Edit scholarship</button> : null}</div></div></td>
                   <td data-label="Country">{item.country}</td><td data-label="Area"><span className="tag">{item.areaLabel}</span></td>
                   <td data-label="Funding"><span className={`funding funding-${item.fundingLevel.toLowerCase().replaceAll(" ", "-")}`}>{item.fundingLevel}</span></td>
                   <td data-label="Intake">{item.intakes.length ? item.intakes.join(" / ") : "Pending"}</td><td data-label="Opens">{formatCompactDate(item.opens)}</td><td data-label="Deadline">{formatCompactDate(item.deadline)}</td>
@@ -922,7 +924,7 @@ export default function Dashboard({
         <footer><span>Automatic date monitoring · official and candidate sources clearly labelled</span><span>{isOwner ? "Owner workspace · progress never overwritten by source refreshes" : "Shared read-only view · personal profile and application data excluded"}</span></footer>
       </main>
 
-      {isOwner && accessOpen ? <div className="access-panel-layer">
+      {isOwner && accessOpen ? <ModalLayer className="access-panel-layer" onClose={() => setAccessOpen(false)}>
         <button className="drawer-backdrop" type="button" aria-label="Close access administration" onClick={() => setAccessOpen(false)}/>
         <aside className="access-panel" role="dialog" aria-modal="true" aria-labelledby="access-title">
           <div className="access-panel-header"><div><p className="eyebrow">OWNER ADMINISTRATION</p><h2 id="access-title">Viewer access</h2><p>Allow a verified email to see scholarship facts. Personal profile and application data remain owner-only.</p></div><button type="button" className="close-button" onClick={() => setAccessOpen(false)} aria-label="Close access administration">×</button></div>
@@ -936,12 +938,12 @@ export default function Dashboard({
           </div>
           <footer className="access-panel-footer"><span>Owner</span><strong>{userEmail}</strong><p>Access changes take effect on the viewer’s next page request.</p></footer>
         </aside>
-      </div> : null}
+      </ModalLayer> : null}
 
-      {selected && selectedProgress ? <div className="drawer-layer">
+      {selected && selectedProgress ? <ModalLayer className="drawer-layer" onClose={closeDetails}>
         <button className="drawer-backdrop" type="button" aria-label="Close scholarship details" onClick={closeDetails}/>
         <aside className="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
-          <div className="drawer-header"><div><p className="eyebrow">{isOwner ? "APPLICATION WORKSPACE" : "SHARED SCHOLARSHIP DETAILS"}</p><h2 id="drawer-title">{selected.name}</h2><div className="drawer-tags"><span>{selected.country}</span><span>{selected.fundingLevel}</span>{isOwner ? <span>{selected.fit}</span> : null}{isOwner && selected.trackingOrigin === "personal" ? <span>Added by you</span> : null}</div></div><button type="button" className="close-button" onClick={closeDetails} aria-label="Close details">×</button></div>
+          <div className="drawer-header"><div><p className="eyebrow">{isOwner ? "APPLICATION WORKSPACE" : "SHARED SCHOLARSHIP DETAILS"}</p><div className="drawer-identity"><ScholarshipLogo id={selected.id} fallback={selected.sourceTag} large /><h2 id="drawer-title">{selected.name}</h2></div><div className="drawer-tags"><span>{selected.country}</span><span>{selected.fundingLevel}</span>{isOwner ? <span>{selected.fit}</span> : null}{isOwner && selected.trackingOrigin === "personal" ? <span>Added by you</span> : null}</div></div><button type="button" className="close-button" onClick={closeDetails} aria-label="Close details">×</button></div>
           <div className="drawer-scroll">
             {isOwner && editingId === selected.id ? <ScholarshipEditor key={selected.id} scholarship={selected} source={sourceScholarships.find((item) => item.id === selected.id)!} edit={manualEdits.find((row) => row.scholarshipId === selected.id)} closeGuardRef={closeEditorGuard} onCancel={cancelEditor} onConflict={updateManualEdit} onSaved={(edit) => { updateManualEdit(edit); setEditingId(null); setEditMessage("Scholarship saved. Your corrections are protected from automatic refreshes."); }}/> : <>
             {isOwner ? <section className="edit-scholarship-banner"><div><strong>Make this scholarship your own</strong><p>Edit facts, dates, links and your private assessment.</p></div><button type="button" className="save-button" disabled={storageState !== "connected"} onClick={() => { setEditingId(selected.id); setEditMessage(""); }}>✎ Edit scholarship</button></section> : null}
@@ -960,7 +962,7 @@ export default function Dashboard({
             </>}
           </div>
         </aside>
-      </div> : null}
+      </ModalLayer> : null}
     </div>
   );
 }

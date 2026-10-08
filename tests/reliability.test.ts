@@ -66,15 +66,23 @@ test("retracted automatic extractions never become verified-change email events"
 });
 
 test("mobile reminder modal is closable and viewport-safe", async () => {
-  const [component, css] = await Promise.all([
+  const [component, css, modal] = await Promise.all([
     readFile(new URL("../app/ReminderCenter.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/ModalLayer.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(component, /aria-label="Close reminder center"/);
-  assert.match(component, /event\.key === "Escape"/);
-  assert.match(component, /createPortal\(<div className="reminder-layer"/);
-  assert.match(component, /<\/div>, document\.body\)/);
+  assert.match(component, /<ModalLayer className="reminder-layer"/);
+  assert.match(component, /className="reminder-scroll"/);
+  assert.match(component, /form="reminder-settings-form"/);
+  assert.match(modal, /event\.key === "Escape"/);
+  assert.match(modal, /createPortal\(/);
+  assert.match(modal, /document\.body\)/);
+  assert.match(modal, /element\.inert = true/);
+  assert.match(modal, /previouslyFocused\.focus/);
   assert.match(css, /height: 100dvh/);
   assert.match(css, /overflow-y: auto/);
+  assert.match(css, /font-size: 16px/);
+  assert.match(css, /min-height: 44px/);
   assert.match(css, /\.lower-grid\s*\{\s*display: grid;\s*grid-template-columns: minmax\(0, 1\.2fr\)/);
 });

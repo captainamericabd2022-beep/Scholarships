@@ -76,3 +76,11 @@ npm run lint
 The legacy D1 integration test is skipped unless explicitly configured; it is not evidence of Postgres verification. The database smoke test can be run separately with `node --env-file=.env.local --import=tsx scripts/verify-database.ts`. It creates isolated fixtures and removes only those fixtures after the check.
 
 No source license has been selected.
+
+## Mobile dialogs and official branding
+
+Reminder settings, viewer access and scholarship details/editing use a shared portal with background scroll locking, keyboard focus containment, Escape handling and focus restoration. Phone layouts use the dynamic viewport and safe-area insets; reminder Close/Save actions remain outside the scrollable content.
+
+The 18 initial scholarships display official programme/provider images served locally from `public/scholarships/`. The source page, exact original asset and branding verification date are recorded in `branding.json`; this date verifies the image only, not scholarship deadlines or eligibility. Marks retain their original colours and proportions, and remain the property of their respective organisations. They identify tracked programmes and do not imply endorsement. Added programmes without a mapped image, or failed images, receive a text fallback.
+
+`scripts/research-logos.mjs` inspects official pages; `scripts/download-logos.mjs` deliberately refreshes the selected assets. These scripts are maintenance helpers, not part of automatic scholarship refresh. Windows may need `CSE_WINDOWS_TRANSPORT=1`; source assets behind bot protection can instead be downloaded from the visible official page and normalized locally. No private application data is included in the image manifest.

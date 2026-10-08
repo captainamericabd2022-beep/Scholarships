@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { createPortal } from "react-dom";
+import { useMemo, useState, type FormEvent } from "react";
+import ModalLayer from "./ModalLayer";
 import type { Scholarship } from "../lib/scholarships";
 import { daysUntilDateKey } from "../lib/reminders";
 
@@ -68,15 +68,6 @@ export default function ReminderCenter({
   ]).filter((item): item is NonNullable<typeof item> & { days: number } => Boolean(item && item.days !== null && item.days >= 0 && item.days <= 60))
     .sort((a, b) => a.days - b.days)
     .slice(0, 6), [scholarships]);
-
-  useEffect(() => {
-    if (!open) return;
-    const close = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("keydown", close);
-    return () => window.removeEventListener("keydown", close);
-  }, [open]);
 
   async function loadSettings() {
     setLoading(true);
@@ -163,7 +154,7 @@ export default function ReminderCenter({
       <button className="reminder-button" type="button" onClick={showPanel}>
         <span aria-hidden="true">◷</span>Reminders
       </button>
-      {open ? createPortal(<div className="reminder-layer">
+      {open ? <ModalLayer className="reminder-layer" onClose={() => setOpen(false)}>
         <button className="drawer-backdrop" type="button" aria-label="Close reminder center" onClick={() => setOpen(false)}/>
         <aside className="reminder-panel" role="dialog" aria-modal="true" aria-labelledby="reminder-title">
           <div className="reminder-panel-header">
@@ -171,6 +162,7 @@ export default function ReminderCenter({
             <button className="close-button reminder-close-button" type="button" aria-label="Close reminder center" onClick={() => setOpen(false)}><span aria-hidden="true">×</span><b>Close</b></button>
           </div>
 
+          <div className="reminder-scroll">
           <div className={`provider-banner provider-${provider.configured ? "ready" : "setup"}`}>
             <span aria-hidden="true">{provider.configured ? "●" : "○"}</span>
             <div><strong>{provider.configured ? `${provider.name} connected` : "Email delivery needs connection"}</strong><p>{provider.configured ? "Automatic messages can be delivered and deduplicated." : "Your settings are saved now; messages will not be claimed as sent until an authenticated provider is connected."}</p></div>
@@ -188,7 +180,7 @@ export default function ReminderCenter({
             </div>
           </section>
 
-          {preferences ? <form className="reminder-settings" onSubmit={save}>
+          {preferences ? <form id="reminder-settings-form" className="reminder-settings" onSubmit={save}>
             <label className="master-notification-toggle" htmlFor="reminder-enabled" aria-label="Enable email notifications"><div><strong>Email notifications</strong><span>{preferences.email}</span></div><input id="reminder-enabled" type="checkbox" checked={preferences.isEnabled} onChange={(event) => updatePreference("isEnabled", event.target.checked)}/><i aria-hidden="true"/></label>
             <fieldset disabled={!preferences.isEnabled || loading}>
               <legend>Notify me about</legend>
@@ -197,7 +189,6 @@ export default function ReminderCenter({
               <label htmlFor="reminder-deadlines" aria-label="Notify me about application deadlines"><input id="reminder-deadlines" type="checkbox" checked={preferences.deadlineReminders} onChange={(event) => updatePreference("deadlineReminders", event.target.checked)}/><span><strong>Application deadlines</strong><small>Send countdown reminders only once at each selected interval.</small></span></label>
             </fieldset>
             <div className="threshold-settings"><span>Countdown intervals</span><div>{thresholdOptions.map((value) => <label key={value} className={preferences.deadlineThresholds.includes(value) ? "selected" : ""}><input type="checkbox" checked={preferences.deadlineThresholds.includes(value)} onChange={() => toggleThreshold(value)}/>{value === 0 ? "Due day" : `${value}d`}</label>)}</div></div>
-            <button className="save-reminders" type="submit" disabled={saving || loading}>{saving ? "Working…" : "Save reminder settings"}</button>
           </form> : <div className="reminder-loading">{loading ? "Loading your preferences…" : "Preferences unavailable."}</div>}
 
           <p className="reminder-message" aria-live="polite">{message}</p>
@@ -210,8 +201,10 @@ export default function ReminderCenter({
           {isOwner ? <section className="reminder-owner-tools"><div><p className="eyebrow">OWNER CONTROLS</p><h3>Delivery check</h3><p>Every owner source refresh checks this queue. Your existing scholarship watch can trigger it by opening the dashboard.</p></div><div><button type="button" disabled={saving} onClick={() => ownerAction("dispatch")}>Check & send now</button><button type="button" disabled={saving} onClick={() => ownerAction("test")}>{provider.configured ? "Send test email" : "Test email setup"}</button></div></section> : null}
 
           <section className="delivery-history"><div className="reminder-section-title"><div><p className="eyebrow">DELIVERY HISTORY</p><h3>Recent messages</h3></div></div>{deliveries.length ? deliveries.map((delivery, index) => <article key={`${delivery.attemptedAt}-${index}`}><span className={`delivery-status delivery-${delivery.status}`}>{delivery.status}</span><div><strong>{delivery.subject}</strong><small>{formatDate(delivery.sentAt || delivery.attemptedAt)}{delivery.error ? ` · ${delivery.error}` : ""}</small></div></article>) : <p className="empty-copy">No reminder emails have been sent to this address yet.</p>}</section>
+          </div>
+          <div className="reminder-footer"><button className="quiet-button" type="button" onClick={() => setOpen(false)}>Close</button><button className="save-reminders" form="reminder-settings-form" type="submit" disabled={!preferences || saving || loading}>{saving ? "Saving…" : "Save settings"}</button></div>
         </aside>
-      </div>, document.body) : null}
+      </ModalLayer> : null}
     </>
   );
 }

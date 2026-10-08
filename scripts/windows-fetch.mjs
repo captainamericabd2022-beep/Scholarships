@@ -18,13 +18,13 @@ export function enableWindowsTransport() {
         if (code !== 0) return reject(new Error("Local Windows HTTP transport failed."));
         try {
           const response = JSON.parse(output);
-          resolve({ status: response.status, body: Buffer.from(response.bodyBase64, "base64").toString("utf8") });
+          resolve({ status: response.status, body: Buffer.from(response.bodyBase64, "base64"), contentType: response.contentType });
         } catch {
           reject(new Error("Malformed local HTTP response."));
         }
       });
       processHandle.stdin.end(JSON.stringify({ url: String(url), method: init.method || "GET", headers: Object.fromEntries(new Headers(init.headers)), body: init.body || "" }));
     });
-    return new Response(result.body, { status: result.status, headers: { "content-type": "application/json" } });
+    return new Response(result.body, { status: result.status, headers: { "content-type": result.contentType || "application/json" } });
   };
 }
