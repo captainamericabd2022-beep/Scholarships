@@ -12,6 +12,9 @@ import DataPortability from "./DataPortability";
 import ScholarshipEditor from "./ScholarshipEditor";
 import ModalLayer from "./ModalLayer";
 import ScholarshipLogo from "./ScholarshipLogo";
+import ProfileEditor from "./ProfileEditor";
+import type { ApplicantProfile } from "../lib/profile-policy";
+import { daysUntilDateKey } from "../lib/reminders";
 import { applyManualEdit, type ScholarshipEdit } from "../lib/scholarship-edits";
 
 const checklistItems = [
@@ -99,16 +102,6 @@ type ViewerRecord = {
   updatedAt: string;
 };
 
-type OwnerProfile = {
-  country: string;
-  degree: string;
-  intake: string;
-  cgpa: string;
-  graduation: string;
-  ieltsTarget: string;
-  priority: string;
-};
-
 type DisplayScholarship = Scholarship & {
   active: boolean;
   trackingOrigin: "curated" | "personal" | "watch";
@@ -144,10 +137,7 @@ const statusMeta: Record<TrackerStatus, { icon: string; label: string }> = {
 };
 
 function daysUntil(date: string | null, now = new Date()) {
-  if (!date) return null;
-  const [year, month, day] = date.split("-").map(Number);
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  return Math.ceil((Date.UTC(year, month - 1, day) - today) / 86_400_000);
+  return daysUntilDateKey(date, now);
 }
 
 function dateValue(date: string | null) {
@@ -323,13 +313,14 @@ export default function Dashboard({
   userEmail,
   userName,
   isOwner,
-  profile,
+  profile: initialProfile,
 }: {
   userEmail: string;
   userName: string;
   isOwner: boolean;
-  profile: OwnerProfile | null;
+  profile: ApplicantProfile;
 }) {
+  const [profile, setProfile] = useState(initialProfile);
   const [baselineScholarships, setBaselineScholarships] = useState<Scholarship[]>([]);
   const [updates, setUpdates] = useState<RefreshUpdate[]>([]);
   const [manualEdits, setManualEdits] = useState<ScholarshipEdit[]>([]);
@@ -359,7 +350,7 @@ export default function Dashboard({
   const [addMessage, setAddMessage] = useState("");
   const [archivedDuplicateId, setArchivedDuplicateId] = useState<string | null>(null);
   const [refreshState, setRefreshState] = useState<"idle" | "checking" | "fresh" | "attention" | "error">("idle");
-  const [refreshMessage, setRefreshMessage] = useState("Official-source refresh runs when you visit.");
+  const [refreshMessage, setRefreshMessage] = useState("Daily server-side source watch · no login required.");
   const [sourceAttach, setSourceAttach] = useState("");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [accessOpen, setAccessOpen] = useState(false);
@@ -815,7 +806,7 @@ export default function Dashboard({
       <header className="topbar">
         <div className="brand-lockup">
           <span className="brand-mark" aria-hidden="true">SC</span>
-          <div><p className="eyebrow">{isOwner ? "ANY DEVICE · OWNER CONTROL" : "SHARED VIEW · PERSONAL DATA HIDDEN"}</p><h1>CSE Scholarship Command Center</h1></div>
+          <div><p className="eyebrow">{isOwner ? "ANY DEVICE · OWNER CONTROL" : "SHARED VIEW · ADMINISTRATOR DATA HIDDEN"}</p><h1>CSE Scholarship Command Center</h1></div>
         </div>
         <div className="topbar-actions">
           {isOwner ? <button className={`sync-button sync-${refreshState}`} type="button" onClick={() => runAutoRefresh(true)} disabled={refreshState === "checking"}>
@@ -823,6 +814,7 @@ export default function Dashboard({
           </button> : null}
           {isOwner ? <button className="access-admin-button" type="button" onClick={openAccessAdmin}><span aria-hidden="true">◈</span>Manage access</button> : null}
           <ReminderCenter userEmail={userEmail} isOwner={isOwner} scholarships={activeScholarships}/>
+          <ProfileEditor profile={profile} isOwner={isOwner} onSaved={setProfile}/>
           <div className="owner-chip" title={userEmail}>
             <span>{userName.slice(0, 1).toUpperCase()}</span>
             <div><strong>{userName}</strong><small>{isOwner ? "Access administrator" : "Read-only viewer"}</small></div>
@@ -838,7 +830,7 @@ export default function Dashboard({
             <div className="mission-copy">
               <p className="eyebrow" id="mission-title">{isOwner ? "NEXT BEST MOVE" : "SHARED SCHOLARSHIP INTELLIGENCE"}</p>
               {missionTarget ? <>
-                <h2>{isOwner ? missionTarget.shortName : "Official scholarship watchlist"}</h2><p>{isOwner ? missionTarget.nextAction : `Next announced milestone: ${missionTarget.shortName}. Personal fit, profile and application progress are excluded from this view.`}</p>
+                <h2>{isOwner ? missionTarget.shortName : "Official scholarship watchlist"}</h2><p>{isOwner ? missionTarget.nextAction : `Next announced milestone: ${missionTarget.shortName}. Administrator fit, profile and application progress are excluded from this view.`}</p>
                 <div className="mission-meta">{isOwner ? <span>{missionTarget.fit}</span> : <span>Read-only</span>}<span>{missionTarget.deadline && (daysUntil(missionTarget.deadline) ?? -1) >= 0 ? `${countdownLabel(missionTarget.deadline)} to deadline` : missionTarget.opens && (daysUntil(missionTarget.opens) ?? -1) >= 0 ? `Opens in ${countdownLabel(missionTarget.opens)}` : "Date watch active"}</span></div>
               </> : <><h2>Build your next application</h2><p>Add an official scholarship link or name to begin tracking it.</p></>}
             </div>
@@ -847,14 +839,15 @@ export default function Dashboard({
               <strong>{events[0]?.days ?? "∞"}</strong><small>{events[0] ? "days to milestone" : "source watch"}</small>
             </div>
           </div>
-          {isOwner && profile ? <aside className="profile-card" aria-label="Applicant profile">
-            <div className="profile-head"><div className="avatar">BD</div><div><strong>{profile.country} · {profile.degree}</strong><span>{profile.intake}</span></div></div>
+          <aside className="profile-card" aria-label="Applicant profile">
+            <div className="profile-head"><div className="avatar" aria-hidden="true">◈</div><div><strong>{profile.country || "Country not set"} · {profile.degree || "Degree not set"}</strong><span>{profile.intake || "Target intake not set"}</span></div></div>
             <div className="profile-stats">
-              <div><span>CGPA</span><strong>{profile.cgpa}</strong></div><div><span>Graduation</span><strong>{profile.graduation}</strong></div>
-              <div><span>IELTS target</span><strong>{profile.ieltsTarget}</strong></div><div><span>Priority</span><strong>{profile.priority}</strong></div>
+              <div><span>CGPA</span><strong>{profile.cgpa || "Not set"}</strong></div><div><span>Graduation</span><strong>{profile.graduation || "Not set"}</strong></div>
+              <div><span>IELTS / English</span><strong>{profile.ieltsTarget || "Not set"}</strong></div><div><span>Priority</span><strong>{profile.priority || "Not set"}</strong></div>
             </div>
             <div className={`source-radar source-${refreshState}`}><span aria-hidden="true">●</span><div><strong>Official-source radar</strong><small>{refreshMessage}</small></div></div>
-          </aside> : <aside className="profile-card shared-privacy-card" aria-label="Shared-view privacy"><div className="privacy-mark" aria-hidden="true">◈</div><p className="eyebrow">PRIVACY-PROTECTED VIEW</p><h2>Scholarship facts only</h2><p>CGPA, IELTS target, fit assessments, private notes, checklists and application progress never enter this viewer response.</p><div className="privacy-status"><span aria-hidden="true">●</span>Read-only access for {userEmail}</div></aside>}
+            <p className="profile-privacy-note">{isOwner ? "Private · shared by the two administrators only" : "Your private profile · administrator information remains hidden"}</p>
+          </aside>
         </section>
 
         {isOwner ? <section className="add-command panel" aria-labelledby="add-scholarship-title">

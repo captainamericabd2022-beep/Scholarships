@@ -53,6 +53,8 @@ export type SourceResearch = {
   confidence: "established-official" | "candidate-official";
   candidates: Partial<Record<MonitoredField, string | string[]>>;
   ambiguousFields: MonitoredField[];
+  dateAmbiguities?: Array<"opens" | "deadline">;
+  dateEvidence?: { opens: string[]; deadline: string[] };
 };
 
 export type MonitoredField =
@@ -216,12 +218,22 @@ export function extractSourceSignals(html: string, text: string, finalUrl: strin
 
 function isoDate(value: string) {
   const cleaned = value.replace(/(\d)(st|nd|rd|th)\b/gi, "$1").replace(/,/g, "");
-  const timestamp = Date.parse(cleaned);
-  if (!Number.isFinite(timestamp)) return null;
-  return new Date(timestamp).toISOString().slice(0, 10);
+  const numeric = cleaned.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const dayFirst = cleaned.match(/^(\d{1,2})\s+([a-z]+)\s+(\d{4})$/i);
+  const monthFirst = cleaned.match(/^([a-z]+)\s+(\d{1,2})\s+(\d{4})$/i);
+  const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+  const year = Number(numeric?.[1] ?? dayFirst?.[3] ?? monthFirst?.[3]);
+  const monthName = dayFirst?.[2] ?? monthFirst?.[1] ?? "";
+  const month = numeric ? Number(numeric[2]) : months.indexOf(monthName.slice(0, 3).toLowerCase()) + 1;
+  const day = Number(numeric?.[3] ?? dayFirst?.[1] ?? monthFirst?.[2]);
+  if (!year || month < 1 || month > 12 || !day) return null;
+  // Scholarship dates are calendar values, not local-machine midnight instants.
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return date.toISOString().slice(0, 10);
 }
 
-function keywordDate(text: string, keywords: string) {
+export function dateEvidence(text: string, keywords: string, now = new Date()) {
   const patterns = [
     new RegExp(`(?:${keywords})[^.]{0,110}?(${datePattern})`, "gi"),
     new RegExp(`(${datePattern})[^.]{0,70}?(?:${keywords})`, "gi"),
@@ -233,14 +245,13 @@ function keywordDate(text: string, keywords: string) {
       if (parsed) dates.add(parsed);
     }
   }
-  const today = new Date();
+  const today = now;
   const floor = new Date(Date.UTC(today.getUTCFullYear() - 1, 0, 1)).toISOString().slice(0, 10);
   const ceiling = new Date(Date.UTC(today.getUTCFullYear() + 4, 11, 31)).toISOString().slice(0, 10);
   const plausible = [...dates].filter((date) => date >= floor && date <= ceiling).sort();
-  const nearFuture = plausible.filter(
-    (date) => Date.parse(`${date}T23:59:59Z`) >= Date.now() - 45 * 86_400_000,
-  );
-  return nearFuture[0] ?? plausible.at(-1) ?? null;
+  // Multiple dates may describe separate rounds, awards or years. Picking the
+  // nearest one would invent programme context; require review instead.
+  return { date: plausible.length === 1 ? plausible[0] : null, candidates: plausible, ambiguous: plausible.length > 1 };
 }
 
 async function hashText(value: string) {
@@ -251,27 +262,28 @@ async function hashText(value: string) {
     .join("");
 }
 
-async function fetchPage(url: URL, redirectCount = 0): Promise<Response> {
+async function fetchPage(url: URL, signal: AbortSignal, redirectCount = 0): Promise<Response> {
   const response = await fetch(url, {
     redirect: "manual",
     headers: {
       accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
       "user-agent": "CSE-Scholarship-Command-Center/2.0 (+official-source-monitor)",
     },
-    signal: AbortSignal.timeout(12_000),
+    signal,
   });
   if (response.status >= 300 && response.status < 400 && redirectCount < 3) {
     const location = response.headers.get("location");
     if (!location) return response;
     const next = validateSourceUrl(new URL(location, url).toString());
-    return fetchPage(next, redirectCount + 1);
+    return fetchPage(next, signal, redirectCount + 1);
   }
   return response;
 }
 
 export async function researchOfficialPage(value: string): Promise<SourceResearch> {
   const url = validateSourceUrl(value);
-  const response = await fetchPage(url);
+  // One bounded budget covers redirects AND the body, not 15s per redirect.
+  const response = await fetchPage(url, AbortSignal.timeout(15_000));
   if (!response.ok) throw new Error(`Official page returned HTTP ${response.status}.`);
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("text/html") && !contentType.includes("application/xhtml+xml")) {
@@ -283,20 +295,18 @@ export async function researchOfficialPage(value: string): Promise<SourceResearc
   const finalUrl = response.url || url.toString();
   const title = pageTitle(html);
   const signals = extractSourceSignals(html, text, finalUrl, title);
+  const opening = dateEvidence(text, "applications? (?:open|start|begin)|opening date|application (?:start|opening)|start period|opens on");
+  const closing = dateEvidence(text, "application deadline|deadline|closing date|applications? close|apply by|ending period|closes on");
   return {
     title,
     text,
     contentHash: await hashText(text),
     httpStatus: response.status,
     finalUrl,
-    opens: keywordDate(
-      text,
-      "applications? (?:open|start|begin)|opening date|application (?:start|opening)|start period|opens on",
-    ),
-    deadline: keywordDate(
-      text,
-      "application deadline|deadline|closing date|applications? close|apply by|ending period|closes on",
-    ),
+    opens: opening.date,
+    deadline: closing.date,
+    dateAmbiguities: [...(opening.ambiguous ? ["opens" as const] : []), ...(closing.ambiguous ? ["deadline" as const] : [])],
+    dateEvidence: { opens: opening.candidates, deadline: closing.candidates },
     confidence: isEstablishedOfficialUrl(finalUrl)
       ? "established-official"
       : "candidate-official",
@@ -391,10 +401,12 @@ export function buildPendingScholarship(input: {
 
 export function extractAutomaticPatch(item: Scholarship, research: SourceResearch) {
   const patch: Partial<Scholarship> = {};
-  if (research.opens && research.opens !== item.opens) patch.opens = research.opens;
-  if (research.deadline && research.deadline !== item.deadline) patch.deadline = research.deadline;
-  const nextOpens = research.opens ?? item.opens;
-  const nextDeadline = research.deadline ?? item.deadline;
+  const opens = research.dateAmbiguities?.includes("opens") ? null : research.opens;
+  const deadline = research.dateAmbiguities?.includes("deadline") ? null : research.deadline;
+  if (opens && opens !== item.opens) patch.opens = opens;
+  if (deadline && deadline !== item.deadline) patch.deadline = deadline;
+  const nextOpens = opens ?? item.opens;
+  const nextDeadline = deadline ?? item.deadline;
   const nextStatus = statusFromDates(nextOpens, nextDeadline);
   if (nextStatus !== item.baseStatus && !["SUBMITTED", "RESULT PENDING", "SELECTED"].includes(item.baseStatus)) {
     patch.baseStatus = nextStatus;

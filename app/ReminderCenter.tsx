@@ -26,7 +26,7 @@ type Delivery = {
 type SettingsPayload = {
   preferences?: Preferences;
   provider?: { configured: boolean; name: string; senderScope?: "owner-only" | "multi-user"; testRecipient?: string };
-  health?: { lastAutomaticCheck: string; nextScheduledCheck: string; lastSuccessfulEmail: string; failedDeliveries: number; sourcesRequiringReview: number; monitorStatus: string };
+  health?: { lastAutomaticCheck: string; nextScheduledCheck: string; lastScheduledCheck: string; scheduledStatus: string; scheduledError: string; scheduleWindow: string; lastSuccessfulEmail: string; failedDeliveries: number; sourcesRequiringReview: number; monitorStatus: string };
   recentDeliveries?: Delivery[];
   automaticCheck?: string;
   error?: string;
@@ -177,19 +177,23 @@ export default function ReminderCenter({
           <div className="reminder-scroll">
           <div className={`provider-banner provider-${provider.configured ? "ready" : "setup"}`}>
             <span aria-hidden="true">{provider.configured ? "●" : "○"}</span>
-            <div><strong>{provider.configured ? `${provider.name} ${health?.lastSuccessfulEmail ? "sending tested" : "configured · test needed"}` : "Email delivery needs connection"}</strong><p>{provider.configured ? "A message is recorded as sent only after Resend accepts it. Inbox delivery is not guaranteed by that status." : "Your preferences are saved. A server-side Resend key and sender must be configured in Vercel before messages can be sent."}</p></div>
+            <div><strong>{loading ? "Checking email connection…" : provider.configured ? `${provider.name} ${health?.lastSuccessfulEmail ? "sending tested" : "configured · test needed"}` : "Email delivery needs connection"}</strong><p>{loading ? "Loading saved settings and server health." : provider.configured ? "A message is recorded as sent only after Resend accepts it. Inbox delivery is not guaranteed by that status." : "Your preferences are saved. A server-side Resend key and sender must be configured in Vercel before messages can be sent."}</p></div>
           </div>
           {provider.configured && provider.senderScope === "owner-only" ? <div className="sender-domain-notice"><strong>Owner-only testing sender</strong><p>Resend’s testing domain sends only to the Resend account email. {isOwner && provider.testRecipient ? `Test recipient: ${provider.testRecipient}. ` : ""}Delivery to other administrators and invited users requires a verified domain and a sender on that domain.</p><a href="https://resend.com/docs/knowledge-base/403-error-resend-dev-domain" target="_blank" rel="noreferrer">Sending-domain requirements ↗</a></div> : null}
 
           <section className="reminder-health" aria-label="Reminder health">
-            <div className="reminder-section-title"><div><p className="eyebrow">SYSTEM HEALTH</p><h3>Reminder health</h3></div><span className={`health-dot health-${health?.monitorStatus ?? "not-run"}`}>●</span></div>
+            <div className="reminder-section-title"><div><p className="eyebrow">SYSTEM HEALTH</p><h3>Reminder health</h3></div><span className={`health-dot health-${health?.scheduledStatus ?? "not-run"}`}>●</span></div>
             <div className="health-grid">
-              <div><span>Last automatic check</span><strong>{health?.lastAutomaticCheck ? formatTimestamp(health.lastAutomaticCheck) : "Not run yet"}</strong></div>
-              <div><span>Next scheduled check</span><strong>{health?.nextScheduledCheck ? formatTimestamp(health.nextScheduledCheck) : "Watch reconnection pending"}</strong></div>
+              <div><span>Last server-scheduled check</span><strong>{health?.lastScheduledCheck ? formatTimestamp(health.lastScheduledCheck) : "Not run yet"}</strong></div>
+              <div><span>Next daily window starts</span><strong>{health?.nextScheduledCheck ? formatTimestamp(health.nextScheduledCheck) : "Scheduling not configured"}</strong></div>
+              <div><span>Daily check window</span><strong>{health?.scheduleWindow ?? "Loading…"}</strong></div>
+              <div><span>Server check result</span><strong>{health?.scheduledStatus?.replaceAll("-", " ") ?? "Not run yet"}</strong></div>
+              <div><span>Latest source refresh</span><strong>{health?.lastAutomaticCheck ? formatTimestamp(health.lastAutomaticCheck) : "Not run yet"}</strong></div>
               <div><span>Last provider-accepted email</span><strong>{health?.lastSuccessfulEmail ? formatTimestamp(health.lastSuccessfulEmail) : "None yet"}</strong></div>
               <div><span>Failed attempts in recent history</span><strong>{health?.failedDeliveries ?? 0}</strong></div>
               <div><span>Sources requiring review</span><strong>{health?.sourcesRequiringReview ?? 0}</strong></div>
             </div>
+            {health?.scheduledError ? <p className="reminder-message">Last server error: {health.scheduledError}</p> : null}
           </section>
 
           {preferences ? <form id="reminder-settings-form" className="reminder-settings" onSubmit={save}>
@@ -210,7 +214,7 @@ export default function ReminderCenter({
             <div>{upcoming.length ? upcoming.map((item) => <article key={item.id}><i className={item.days <= 3 ? "urgent" : item.days <= 7 ? "near" : "future"}/><div><strong>{item.name}</strong><span>{item.kind === "opens" ? "Applications open" : "Deadline"} · {formatDate(item.date)}</span></div><b>{item.days === 0 ? "Today" : `${item.days}d`}</b></article>) : <p className="empty-copy">No confirmed opening or deadline dates in the next 60 days.</p>}</div>
           </section>
 
-          {isOwner ? <section className="reminder-owner-tools"><div><p className="eyebrow">OWNER CONTROLS</p><h3>Delivery check</h3><p>Every owner source refresh checks this queue. Your existing scholarship watch can trigger it by opening the dashboard.</p></div><div><button type="button" disabled={saving} onClick={() => ownerAction("dispatch")}>Check & send now</button><button type="button" disabled={saving} onClick={() => ownerAction("test")}>{provider.configured ? "Send test email" : "Test email setup"}</button></div></section> : null}
+          {isOwner ? <section className="reminder-owner-tools"><div><p className="eyebrow">OWNER CONTROLS</p><h3>Delivery check</h3><p>The daily server job checks official sources and sends eligible, unsent reminders without a visit or login. Manual checks use the same queue and cannot repeat already-sent events.</p></div><div><button type="button" disabled={saving || loading} onClick={() => ownerAction("dispatch")}>Check & send now</button><button type="button" disabled={saving || loading} onClick={() => ownerAction("test")}>{provider.configured ? "Send test email" : "Test email setup"}</button></div></section> : null}
 
           <section className="delivery-history"><div className="reminder-section-title"><div><p className="eyebrow">DELIVERY HISTORY</p><h3>Recent messages</h3></div></div>{deliveries.length ? deliveries.map((delivery, index) => <article key={`${delivery.attemptedAt}-${index}`}><span className={`delivery-status delivery-${delivery.status}`}>{delivery.status}</span><div><strong>{delivery.subject}</strong><small>{isOwner ? `To ${delivery.recipientEmail} · ` : ""}{formatTimestamp(delivery.sentAt || delivery.attemptedAt)}{delivery.error ? ` · ${delivery.error}` : ""}</small></div></article>) : <p className="empty-copy">No recorded email attempts {isOwner ? "for the administrators" : "for this address"} yet.</p>}</section>
           </div>

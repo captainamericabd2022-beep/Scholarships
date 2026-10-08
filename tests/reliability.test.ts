@@ -65,6 +65,11 @@ test("retracted automatic extractions never become verified-change email events"
   assert.equal(events.some((event) => event.type === "scholarship-change"), false);
 });
 
+test("archived scholarship audit changes do not produce reminder emails", () => {
+  const events = buildReminderEvents([], [{ id: 101, scholarshipId: target.id, changeType: "DEADLINE_CHANGED", summary: "Archived programme changed", sourceUrl: target.officialNoticeUrl, changedAt: "2027-01-08T00:00:00Z" }], new Date("2027-01-08T00:00:00Z"));
+  assert.deepEqual(events, []);
+});
+
 test("mobile reminder modal is closable and viewport-safe", async () => {
   const [component, css, modal] = await Promise.all([
     readFile(new URL("../app/ReminderCenter.tsx", import.meta.url), "utf8"),

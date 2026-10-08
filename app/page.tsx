@@ -4,7 +4,8 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { viewerAccess } from "../db/schema";
 import { isAuthorizedOwner, requireUser } from "./auth";
-import { readOwnerProfile } from "../lib/owner-profile";
+import { readApplicantProfile } from "../lib/owner-profile";
+import { profileDataKey } from "../lib/profile-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,7 @@ export default async function Home() {
       userEmail={user.email}
       userName={user.displayName}
       isOwner={isOwner}
-      profile={isOwner ? await readOwnerProfile() : null}
+      profile={(await readApplicantProfile(profileDataKey(user.email, process.env.OWNER_EMAIL, process.env.ADMIN_EMAILS), isOwner)).profile}
     />
   );
 }

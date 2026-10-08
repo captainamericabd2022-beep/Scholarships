@@ -19,7 +19,7 @@ test("build contains the scholarship command center experience", async () => {
 });
 
 test("keeps verified source facts separate from durable user progress", async () => {
-  const [data, dashboard, schema, hosting, refreshRoute, dashboardRoute, viewerRoute, page, reminderRoute, reminderEngine, reminderCenter] = await Promise.all([
+  const [data, dashboard, schema, hosting, refreshRoute, dashboardRoute, viewerRoute, page, reminderRoute, reminderEngine, reminderCenter, reminderService] = await Promise.all([
     readFile(new URL("../lib/scholarships.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/Dashboard.tsx", import.meta.url), "utf8"),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
@@ -31,6 +31,7 @@ test("keeps verified source facts separate from durable user progress", async ()
     readFile(new URL("../app/api/notifications/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/reminders.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/ReminderCenter.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/notification-service.ts", import.meta.url), "utf8"),
   ]);
 
   assert.equal((data.match(/^ {4}id: "/gm) ?? []).length, 18);
@@ -67,13 +68,13 @@ test("keeps verified source facts separate from durable user progress", async ()
   assert.match(dashboardRoute, /isOwner \? db\.select\(\)\.from\(userProgress\)/);
   assert.match(viewerRoute, /requestUserId/);
   assert.match(viewerRoute, /isActive/);
-  assert.match(page, /profile=\{isOwner/);
+  assert.match(page, /readApplicantProfile\(profileDataKey\(user.email.*isOwner/s);
   assert.match(dashboard, /Manage access/);
-  assert.match(dashboard, /Privacy-protected view/i);
+  assert.match(dashboard, /administrator information remains hidden/i);
   assert.match(schema, /notification_preferences/);
   assert.match(schema, /notification_deliveries/);
   assert.match(reminderRoute, /notification_delivery_recipient_event_idx|onConflictDoUpdate/);
-  assert.match(reminderRoute, /Viewer.*opt-in|isEnabled: isOwner/i);
+  assert.match(reminderService, /isEnabled: isOwner/i);
   assert.match(reminderEngine, /ALLOWED_REMINDER_THRESHOLDS = \[60, 30, 14, 7, 3, 1, 0\]/);
   assert.match(reminderEngine, /idempotency-key/);
   assert.match(reminderEngine, /Personal profile, fit assessments, notes and application progress are never sent/);

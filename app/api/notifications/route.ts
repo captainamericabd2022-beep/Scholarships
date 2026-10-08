@@ -1,30 +1,24 @@
+import { dispatchReminders, ensurePreferences, rowPreferences, reminderSiteUrl } from "../../../lib/notification-service";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { deliveryHistoryRecipients, sendWithDeliveryAudit, testEmailRecipient, uniqueDeliveryMessages } from "../../../lib/email-delivery";
 import { getDb } from "../../../db";
-import { listManualEdits } from "../../../db/manual-edits";
-import { applyManualEdit } from "../../../lib/scholarship-edits";
+import { jobHealth, JobBusyError } from "../../../lib/background-jobs";
+import { nextWatchWindow, WATCH_JOB } from "../../../lib/job-policy";
 import {
-  changeLog,
   monitorRuns,
   notificationDeliveries,
   notificationPreferences,
-  scholarshipUpdates,
   sourceReviewQueue,
-  userScholarshipTracking,
   viewerAccess,
 } from "../../../db/schema";
 import {
-  buildReminderEvents,
   emailProviderStatus,
-  eventsForPreferences,
   idempotencyKey,
-  normalizeThresholds,
   renderReminderEmail,
-  selectCatchUpEvents,
   sendReminderEmail,
+  normalizeThresholds,
   type ReminderPreferences,
 } from "../../../lib/reminders";
-import { scholarships, type Scholarship } from "../../../lib/scholarships";
 import {
   configuredOwnerEmail,
   configuredAdministratorEmails,
@@ -32,30 +26,11 @@ import {
   requestUserId,
 } from "../../../lib/request-auth";
 
-const LIVE_SITE_URL = "";
-
 function privateJson(payload: unknown, init?: ResponseInit) {
   const headers = new Headers(init?.headers);
   headers.set("cache-control", "private, no-store");
   return Response.json(payload, { ...init, headers });
 }
-
-function safeJson(value: string) {
-  try {
-    return JSON.parse(value) as Record<string, unknown>;
-  } catch {
-    return {};
-  }
-}
-
-function savedThresholds(value: string) {
-  try {
-    return normalizeThresholds(JSON.parse(value));
-  } catch {
-    return normalizeThresholds(null);
-  }
-}
-
 
 async function authorizedUser(request: Request) {
   const identity = await requestIdentity(request);
@@ -68,79 +43,6 @@ async function authorizedUser(request: Request) {
     .where(and(eq(viewerAccess.email, identity.email), eq(viewerAccess.isActive, true)))
     .limit(1);
   return viewer ? { ...identity, isOwner: false } : null;
-}
-
-function rowPreferences(row: typeof notificationPreferences.$inferSelect): ReminderPreferences {
-  return {
-    email: row.email,
-    isEnabled: row.isEnabled,
-    scholarshipChanges: row.scholarshipChanges,
-    openingReminders: row.openingReminders,
-    deadlineReminders: row.deadlineReminders,
-    deadlineThresholds: savedThresholds(row.deadlineThresholdsJson),
-  };
-}
-
-async function ensurePreferences(email: string, userId: string, isOwner: boolean) {
-  const db = getDb();
-  const [existing] = await db
-    .select()
-    .from(notificationPreferences)
-    .where(eq(notificationPreferences.email, email))
-    .limit(1);
-  if (existing) {
-    if (userId && existing.userId !== userId) {
-      await db
-        .update(notificationPreferences)
-        .set({ userId, updatedAt: new Date().toISOString() })
-        .where(eq(notificationPreferences.id, existing.id));
-      return { ...existing, userId };
-    }
-    return existing;
-  }
-  const now = new Date().toISOString();
-  await db.insert(notificationPreferences).values({
-    email,
-    userId,
-    isEnabled: isOwner,
-    scholarshipChanges: true,
-    openingReminders: true,
-    deadlineReminders: true,
-    deadlineThresholdsJson: JSON.stringify([30, 14, 7, 3, 1]),
-    createdAt: now,
-    updatedAt: now,
-  });
-  const [created] = await db
-    .select()
-    .from(notificationPreferences)
-    .where(eq(notificationPreferences.email, email))
-    .limit(1);
-  return created;
-}
-
-async function mergedScholarships() {
-  const db = getDb();
-  const [updateRows, trackingRows] = await Promise.all([
-    db.select().from(scholarshipUpdates),
-    db
-      .select()
-      .from(userScholarshipTracking)
-      .where(eq(userScholarshipTracking.isActive, true)),
-  ]);
-  const updates = new Map(updateRows.map((row) => [row.scholarshipId, safeJson(row.patchJson)]));
-  const items = new Map(
-    scholarships.map((item) => [item.id, { ...item, ...(updates.get(item.id) ?? {}) } as Scholarship]),
-  );
-  for (const row of trackingRows) {
-    const item = safeJson(row.scholarshipJson) as unknown as Scholarship;
-    if (item.id && item.name) items.set(item.id, item);
-  }
-  const edits = await listManualEdits();
-  return [...items.values()].map((item) => applyManualEdit(item, edits));
-}
-
-async function reminderSiteUrl() {
-  return process.env.REMINDER_SITE_URL?.trim() || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : LIVE_SITE_URL);
 }
 
 export async function GET(request: Request) {
@@ -170,19 +72,25 @@ export async function GET(request: Request) {
     const pendingReviews = user.isOwner ? await db.select({ id: sourceReviewQueue.id }).from(sourceReviewQueue).where(and(eq(sourceReviewQueue.userId, user.userId), eq(sourceReviewQueue.status, "pending"))) : [];
     const [lastSuccessful] = await db.select({ sentAt: notificationDeliveries.sentAt }).from(notificationDeliveries).where(and(historyScope, eq(notificationDeliveries.status, "sent"))).orderBy(desc(notificationDeliveries.sentAt)).limit(1);
     const failedDeliveries = recentDeliveries.filter((delivery) => delivery.status === "failed").length;
+    const scheduled = await jobHealth(WATCH_JOB);
+    const scheduleConfigured = process.env.SCHOLARSHIP_CRON_ENABLED === "true" && Boolean(process.env.CRON_SECRET);
     return privateJson({
       preferences: rowPreferences(preferences),
       provider: { configured: provider.configured, name: provider.provider, senderScope: provider.senderScope, testRecipient: user.isOwner ? testEmailRecipient(provider.senderScope, await configuredOwnerEmail(), user.email) : undefined },
       recentDeliveries,
       health: {
         lastAutomaticCheck: latestRun?.completedAt ?? "",
-        nextScheduledCheck: "",
+        nextScheduledCheck: scheduleConfigured ? nextWatchWindow() : "",
+        lastScheduledCheck: scheduled?.lastCompletedAt ?? "",
+        scheduledStatus: scheduled?.lastStatus ?? "not-run",
+        scheduledError: user.isOwner ? scheduled?.lastError ?? "" : "",
+        scheduleWindow: scheduleConfigured ? "Daily, 09:00–09:59 Asia/Dhaka" : "Not configured",
         lastSuccessfulEmail: lastSuccessful?.sentAt ?? "",
         failedDeliveries,
         sourcesRequiringReview: pendingReviews.length,
         monitorStatus: latestRun?.status ?? "not-run",
       },
-      automaticCheck: "Checks after every owner source refresh. The existing scheduled watch must be pointed to this Vercel URL; no new schedule has been created.",
+      automaticCheck: scheduleConfigured ? "Daily server-side official-source checks and unsent reminders run without a visit or login. The current plan schedules within the 09:00–09:59 Bangladesh-time window." : "Server scheduling is not configured. Administrator source refreshes also check for unsent reminders.",
     });
   } catch (error) {
     return privateJson(
@@ -270,127 +178,10 @@ export async function POST(request: Request) {
       }
     }
 
-    const db = getDb();
-    const ownerEmail = (await configuredOwnerEmail()) || user.email;
-    const [viewerRows, changes, items] = await Promise.all([
-      db
-        .select({ email: viewerAccess.email })
-        .from(viewerAccess)
-        .where(eq(viewerAccess.isActive, true)),
-      db.select().from(changeLog).orderBy(desc(changeLog.changedAt)).limit(100),
-      mergedScholarships(),
-    ]);
-    await ensurePreferences(ownerEmail, user.userId, true);
-    const refreshedPreferenceRows = await db.select().from(notificationPreferences);
-    const preferenceByEmail = new Map(refreshedPreferenceRows.map((row) => [row.email, row]));
-    const allowedEmails = new Set([...configuredAdministratorEmails(), ...viewerRows.map((row) => row.email)]);
-    const allEvents = buildReminderEvents(items, changes);
-    const now = new Date().toISOString();
-    let planned = 0;
-    let sent = 0;
-    let failed = 0;
-    const recipients: Array<{ email: string; events: number }> = [];
-
-    for (const email of allowedEmails) {
-      if (provider.senderScope === "owner-only" && email !== ownerEmail) continue;
-      const row = preferenceByEmail.get(email);
-      if (!row || !row.isEnabled) continue;
-      const preferences = rowPreferences(row);
-      const eligible = eventsForPreferences(allEvents, preferences);
-      if (!eligible.length) continue;
-      const previous = await db
-        .select({ eventKey: notificationDeliveries.eventKey })
-        .from(notificationDeliveries)
-        .where(and(
-          eq(notificationDeliveries.recipientEmail, email),
-          eq(notificationDeliveries.status, "sent"),
-        ));
-      const sentKeys = new Set(previous.map((delivery) => delivery.eventKey));
-      const pending = selectCatchUpEvents(eligible, sentKeys);
-      if (!pending.length) continue;
-      planned += pending.length;
-      recipients.push({ email, events: pending.length });
-      if (payload.dryRun) continue;
-      if (!provider.configured) {
-        return privateJson({
-          error: "Reminder events are ready, but email delivery is not connected.",
-          planned,
-          recipients,
-          provider: { configured: false, name: provider.provider },
-        }, { status: 503 });
-      }
-      const message = renderReminderEmail(pending, await reminderSiteUrl());
-      try {
-        const providerId = await sendReminderEmail({
-          to: email,
-          ...message,
-          idempotencyKey: await idempotencyKey(email, pending.map((event) => event.key)),
-        });
-        for (const event of pending) {
-          await db
-            .insert(notificationDeliveries)
-            .values({
-              recipientEmail: email,
-              eventKey: event.key,
-              eventType: event.type,
-              scholarshipId: event.scholarshipId,
-              subject: message.subject,
-              status: "sent",
-              providerId,
-              error: "",
-              attemptedAt: now,
-              sentAt: now,
-            })
-            .onConflictDoUpdate({
-              target: [notificationDeliveries.recipientEmail, notificationDeliveries.eventKey],
-              set: { status: "sent", providerId, error: "", attemptedAt: now, sentAt: now },
-            });
-        }
-        sent += 1;
-      } catch (error) {
-        failed += 1;
-        const messageText = error instanceof Error ? error.message.slice(0, 300) : "Email delivery failed.";
-        for (const event of pending) {
-          await db
-            .insert(notificationDeliveries)
-            .values({
-              recipientEmail: email,
-              eventKey: event.key,
-              eventType: event.type,
-              scholarshipId: event.scholarshipId,
-              subject: message.subject,
-              status: "failed",
-              providerId: "",
-              error: messageText,
-              attemptedAt: now,
-              sentAt: "",
-            })
-            .onConflictDoUpdate({
-              target: [notificationDeliveries.recipientEmail, notificationDeliveries.eventKey],
-              set: { status: "failed", providerId: "", error: messageText, attemptedAt: now },
-            });
-        }
-      }
-    }
-
-    const result = {
-      ok: failed === 0,
-      dryRun: Boolean(payload.dryRun),
-      planned,
-      sent,
-      failed,
-      recipients,
-      provider: { configured: provider.configured, name: provider.provider },
-      message: failed
-        ? `${failed} email delivery attempt${failed === 1 ? "" : "s"} failed. No failed message was marked as sent.`
-        : planned
-        ? payload.dryRun
-          ? `${planned} reminder event${planned === 1 ? "" : "s"} ready for ${recipients.length} recipient${recipients.length === 1 ? "" : "s"}.`
-          : `${sent} email digest${sent === 1 ? "" : "s"} sent.`
-        : "No new reminder events. Nothing was sent.",
-    };
-    return privateJson(result, failed ? { status: 502 } : undefined);
+    const result = await dispatchReminders(user.userId, { dryRun: Boolean(payload.dryRun) });
+    return privateJson(result, result.failed ? { status: 502 } : undefined);
   } catch (error) {
+    if (error instanceof JobBusyError) return privateJson({ ok: true, message: error.message }, { status: 202 });
     return privateJson(
       { error: error instanceof Error ? error.message : "Reminder dispatch failed." },
       { status: 500 },

@@ -1,21 +1,25 @@
-type OwnerProfile = {
-  country: string;
-  degree: string;
-  intake: string;
-  cgpa: string;
-  graduation: string;
-  ieltsTarget: string;
-  priority: string;
-};
+import { and, eq } from "drizzle-orm";
+import { getDb } from "../db";
+import { applicantProfiles } from "../db/schema";
+import { neutralProfile, validateProfile, type ApplicantProfile } from "./profile-policy";
+import { ownerDataKey } from "./auth-policy";
 
-export async function readOwnerProfile(): Promise<OwnerProfile> {
-  const configured = process.env.OWNER_PROFILE_JSON ?? "";
-  let values: Partial<OwnerProfile> = {};
-  try { values = JSON.parse(configured || "{}"); } catch { /* Missing settings use neutral labels. */ }
-  const field = (key: keyof OwnerProfile, fallback = "Not set") => typeof values?.[key] === "string" && values[key]?.trim() ? values[key]!.trim().slice(0, 200) : fallback;
-  return {
-    country: field("country"), degree: field("degree", "CSE"), intake: field("intake"),
-    cgpa: field("cgpa"), graduation: field("graduation"), ieltsTarget: field("ieltsTarget"),
-    priority: field("priority", "Full funding"),
-  };
+function configuredProfile(): ApplicantProfile {
+  try { return validateProfile(JSON.parse(process.env.OWNER_PROFILE_JSON || "{}")); }
+  catch { return neutralProfile(); }
+}
+export async function readApplicantProfile(dataKey: string, sharedAdmin = false) {
+  const [row] = await getDb().select().from(applicantProfiles).where(eq(applicantProfiles.dataKey, dataKey)).limit(1);
+  let profile = sharedAdmin ? configuredProfile() : neutralProfile();
+  if (row) { try { profile = validateProfile(JSON.parse(row.profileJson)); } catch { /* preserve safe fallback */ } }
+  return { profile, revision: row?.revision ?? 0, updatedAt: row?.updatedAt ?? "" };
+}
+export async function readOwnerProfile() { return (await readApplicantProfile(ownerDataKey(process.env.OWNER_EMAIL || ""), true)).profile; }
+export async function saveApplicantProfile(dataKey: string, profile: ApplicantProfile, expectedRevision: number) {
+  const db = getDb();
+  const values = { profileJson: JSON.stringify(validateProfile(profile)), revision: expectedRevision + 1, updatedAt: new Date().toISOString() };
+  const rows = expectedRevision === 0
+    ? await db.insert(applicantProfiles).values({ dataKey, ...values }).onConflictDoNothing().returning()
+    : await db.update(applicantProfiles).set(values).where(and(eq(applicantProfiles.dataKey, dataKey), eq(applicantProfiles.revision, expectedRevision))).returning();
+  return rows.length ? { profile: JSON.parse(rows[0].profileJson) as ApplicantProfile, revision: rows[0].revision, updatedAt: rows[0].updatedAt } : null;
 }

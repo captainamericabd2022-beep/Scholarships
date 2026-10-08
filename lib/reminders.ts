@@ -55,6 +55,8 @@ function datePartsInDhaka(now: Date) {
 export function daysUntilDateKey(dateKey: string | null, now = new Date()) {
   if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return null;
   const [year, month, day] = dateKey.split("-").map(Number);
+  const checked = new Date(Date.UTC(year, month - 1, day));
+  if (checked.getUTCFullYear() !== year || checked.getUTCMonth() !== month - 1 || checked.getUTCDate() !== day) return null;
   const today = datePartsInDhaka(now);
   return Math.round(
     (Date.UTC(year, month - 1, day) - Date.UTC(today.year, today.month - 1, today.day)) /
@@ -83,6 +85,8 @@ export function buildReminderEvents(
     const changedAt = Date.parse(change.changedAt);
     if (!Number.isFinite(changedAt) || changedAt < recentChangeCutoff) continue;
     const scholarship = scholarshipById.get(change.scholarshipId);
+    // Removed/archived programmes must not generate updates from old audit rows.
+    if (!scholarship) continue;
     const name = scholarship?.shortName || scholarship?.name || "Scholarship update";
     events.push({
       key: `change:${change.id}`,

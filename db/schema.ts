@@ -1,6 +1,16 @@
 import { sql } from "drizzle-orm";
 import { boolean, index, integer, pgTable, serial, text, uniqueIndex } from "drizzle-orm/pg-core";
 
+export const applicantProfiles = pgTable("applicant_profiles", {
+  dataKey: text("data_key").primaryKey(), profileJson: text("profile_json").notNull(),
+  revision: integer("revision").notNull().default(1), updatedAt: text("updated_at").notNull(),
+});
+export const backgroundJobs = pgTable("background_jobs", {
+  name: text("name").primaryKey(), leaseToken: text("lease_token").notNull().default(""), leaseUntil: text("lease_until").notNull().default(""),
+  lastStartedAt: text("last_started_at").notNull().default(""), lastCompletedAt: text("last_completed_at").notNull().default(""),
+  lastStatus: text("last_status").notNull().default("not-run"), resultJson: text("result_json").notNull().default("{}"), lastError: text("last_error").notNull().default(""),
+});
+
 export const userProgress = pgTable(
   "user_progress",
   {
