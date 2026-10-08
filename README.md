@@ -72,7 +72,7 @@ After the refresh, the server dispatches only enabled, eligible, previously-unse
 
 Reminders shows the last server job, next daily window, job result, source-review count and provider-accepted email history. Test the deployed machine-authenticated job using `vercel crons run /api/cron/scholarship-watch`, inspect the saved `background_jobs` record, and repeat to verify a quiet duplicate check. Vercel scheduling is best-effort and has no automatic failed-invocation retry; a later daily run catches up pending reminders while the deadline is still upcoming. Keep the hosting, database and email accounts active. Neither permanent availability nor inbox delivery is guaranteed.
 
-This does not create a second Codex/ChatGPT scheduled task or change the existing `CSE Scholarship Watch` automation. That legacy browser-based watch is not required for the server job; if it still runs, both paths share deduplicated data. Do not claim future scheduled executions have been observed just because a manual cron test passed.
+This does not create a second Codex/ChatGPT scheduled task or change the existing `CSE Scholarship Watch` automation. That legacy browser-based watch is not required for the server job. Only checks against this Vercel app share its deduplicated database; a legacy watch still targeting the old Sites deployment may use separate data and must be reviewed separately before claiming cross-site duplicate prevention. Do not claim future scheduled executions have been observed just because a manual cron test passed.
 
 ### Email connection
 
