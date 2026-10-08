@@ -22,7 +22,7 @@ npm run db:migrate
 npm run dev
 ```
 
-Authentication is required even on localhost. There is no identity-header or hostname bypass. Set `OWNER_EMAIL` to the verified primary email of the owner. Creating a Clerk account alone does not grant dashboard access.
+Authentication is required even on localhost. There is no identity-header or hostname bypass. Set `OWNER_EMAIL` to the verified primary email of the owner. Optional `ADMIN_EMAILS` is a comma-separated allowlist of explicitly approved co-administrators. These administrators share full access to the primary owner's private dashboard data; ordinary invited viewers do not. Creating a Clerk account alone does not grant dashboard access.
 
 On Windows machines where direct Node HTTP connections are blocked but Windows HTTP works, the database migration/import scripts support the explicit local-only `CSE_WINDOWS_TRANSPORT=1` fallback. This is not enabled in deployed functions.
 
@@ -37,6 +37,7 @@ Connect the existing Clerk and Neon resources to the Vercel project. Required en
 | `CLERK_SECRET_KEY` | Server-only Clerk credential. |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk's intentionally public browser key. |
 | `OWNER_EMAIL` | Verified owner primary email; required for administrative access. |
+| `ADMIN_EMAILS` | Explicit co-administrator email allowlist; shares owner data and privileges. |
 | `OWNER_PROFILE_JSON` | Server-only private profile object. Never use a `NEXT_PUBLIC_` prefix. |
 | `RESEND_API_KEY` | Optional server-only email credential. |
 | `REMINDER_FROM_EMAIL` | Approved sender address. |

@@ -26,6 +26,7 @@ import {
 import { scholarships, type Scholarship } from "../../../lib/scholarships";
 import {
   configuredOwnerEmail,
+  configuredAdministratorEmails,
   requestIdentity,
   requestUserId,
 } from "../../../lib/request-auth";
@@ -267,7 +268,7 @@ export async function POST(request: Request) {
     await ensurePreferences(ownerEmail, user.userId, true);
     const refreshedPreferenceRows = await db.select().from(notificationPreferences);
     const preferenceByEmail = new Map(refreshedPreferenceRows.map((row) => [row.email, row]));
-    const allowedEmails = new Set([ownerEmail, ...viewerRows.map((row) => row.email)]);
+    const allowedEmails = new Set([...configuredAdministratorEmails(), ...viewerRows.map((row) => row.email)]);
     const allEvents = buildReminderEvents(items, changes);
     const now = new Date().toISOString();
     let planned = 0;

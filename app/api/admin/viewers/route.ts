@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { viewerAccess } from "../../../../db/schema";
 import {
-  configuredOwnerEmail,
+  configuredAdministratorEmail,
   requestIdentity,
   requestUserId,
 } from "../../../../lib/request-auth";
@@ -56,8 +56,8 @@ export async function POST(request: Request) {
     if (!emailPattern.test(email) || email.length > 254) {
       throw new Error("Enter a valid email address.");
     }
-    if (email === await configuredOwnerEmail() || email === owner.email) {
-      throw new Error("The owner already has full access.");
+    if (configuredAdministratorEmail(email)) {
+      throw new Error("This administrator already has full access.");
     }
     const now = new Date().toISOString();
     await getDb()
@@ -90,6 +90,7 @@ export async function DELETE(request: Request) {
     const payload = (await request.json()) as { email?: string };
     const email = normalizedEmail(payload.email);
     if (!email) throw new Error("Viewer email is required.");
+    if (configuredAdministratorEmail(email)) throw new Error("Administrators cannot be removed through viewer access controls.");
     await getDb()
       .update(viewerAccess)
       .set({ isActive: false, updatedAt: new Date().toISOString() })

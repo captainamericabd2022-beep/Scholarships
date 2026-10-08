@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { verifiedSession } from "../lib/session";
-import { isOwnerEmail } from "../lib/auth-policy";
+import { isAdministratorEmail } from "../lib/auth-policy";
 
 export async function requireUser() {
   const user = await verifiedSession();
@@ -8,5 +8,5 @@ export async function requireUser() {
   return user;
 }
 export async function isAuthorizedOwner(email: string) {
-  return isOwnerEmail(email, process.env.OWNER_EMAIL);
+  return isAdministratorEmail(email, process.env.OWNER_EMAIL, process.env.ADMIN_EMAILS);
 }

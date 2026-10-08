@@ -12,6 +12,18 @@ export function isOwnerEmail(email: string, configured: string | undefined) {
   const owner = configured?.trim().toLowerCase();
   return Boolean(owner && email.trim().toLowerCase() === owner);
 }
+export function administratorEmailAllowlist(owner: string | undefined, administrators: string | undefined) {
+  // Fail closed without a primary owner, even if an administrator list exists.
+  if (!owner?.trim()) return [];
+  return [...new Set([owner, ...(administrators ?? "").split(",")].map((entry) => entry.trim().toLowerCase()).filter(Boolean))];
+}
+export function isAdministratorEmail(email: string, owner: string | undefined, administrators: string | undefined) {
+  const normalized = email.trim().toLowerCase();
+  return Boolean(normalized && administratorEmailAllowlist(owner, administrators).includes(normalized));
+}
+export function sharedAdministratorDataKey(email: string, owner: string | undefined, administrators: string | undefined) {
+  return isAdministratorEmail(email, owner, administrators) ? ownerDataKey(owner!) : null;
+}
 export function ownerDataKey(email: string) { return `owner:${email.trim().toLowerCase()}`; }
 export function sameOriginMutation(request: Request) {
   if (["GET", "HEAD", "OPTIONS"].includes(request.method)) return true;

@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { applyManualEdit, editableFields, nextManualPatch, publicManualPatch, validateManualPatch, validateResetFields } from "../lib/scholarship-edits";
 import { scholarships } from "../lib/scholarships";
 import { buildReminderEvents } from "../lib/reminders";
-import { identityFromVerifiedAccount, isOwnerEmail, ownerDataKey, sameOriginMutation } from "../lib/auth-policy";
+import { identityFromVerifiedAccount, isOwnerEmail, ownerDataKey, sameOriginMutation, isAdministratorEmail, sharedAdministratorDataKey, administratorEmailAllowlist } from "../lib/auth-policy";
 
 test("manual fields are validated; dates may be cleared without inventing deadlines", () => {
   assert.deepEqual(validateManualPatch({ deadline: "", opens: null, intakes: ["2035", "2035", "2036"], areas: ["AI", " ML "] }), { deadline: null, opens: null, intakes: ["2035", "2036"], areas: ["AI", "ML"] });
@@ -52,6 +52,20 @@ test("reminder event calculations use the effective owner-entered deadline", () 
   const item = applyManualEdit({ ...scholarships[0], deadline: "2028-01-01", opens: null }, [{ scholarshipId: scholarships[0].id, patch: { deadline: "2027-01-15" }, revision: 1, updatedAt: "2026-09-05" }]);
   const events = buildReminderEvents([item], [], new Date("2027-01-12T00:00:00Z"));
   assert.ok(events.some((event) => event.daysRemaining === 3));
+});
+
+test("explicit co-administrators share the primary owner data without promoting viewers", () => {
+  const owner = "primary@example.com";
+  const administrators = "coadmin@example.com, Another@example.com";
+  assert.equal(isAdministratorEmail(owner, owner, administrators), true);
+  assert.equal(isAdministratorEmail(" COADMIN@example.com ", owner, administrators), true);
+  assert.equal(isAdministratorEmail("viewer@example.com", owner, administrators), false);
+  assert.equal(isAdministratorEmail("coadmin@example.com", undefined, administrators), false);
+  assert.equal(isAdministratorEmail("", owner, "coadmin@example.com,"), false);
+  assert.deepEqual(administratorEmailAllowlist(owner, "coadmin@example.com, PRIMARY@example.com,,"), [owner, "coadmin@example.com"]);
+  assert.equal(sharedAdministratorDataKey(owner, owner, administrators), "owner:primary@example.com");
+  assert.equal(sharedAdministratorDataKey("coadmin@example.com", owner, administrators), "owner:primary@example.com");
+  assert.equal(sharedAdministratorDataKey("viewer@example.com", owner, administrators), null);
 });
 
 test("all editable fields are present and protected dialog actions are reachable", async () => {
