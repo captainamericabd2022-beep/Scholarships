@@ -84,5 +84,6 @@ test("mobile reminder modal is closable and viewport-safe", async () => {
   assert.match(css, /overflow-y: auto/);
   assert.match(css, /font-size: 16px/);
   assert.match(css, /min-height: 44px/);
+  assert.match(css, /\.modal-root \.access-panel-footer \{ grid-template-columns: auto minmax\(0,1fr\)/);
   assert.match(css, /\.lower-grid\s*\{\s*display: grid;\s*grid-template-columns: minmax\(0, 1\.2fr\)/);
 });

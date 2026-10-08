@@ -2214,6 +2214,9 @@ textarea:disabled {
 .modal-root .viewer-list article strong { font-size: 14px; white-space: normal; overflow-wrap: anywhere; }
 .modal-root .viewer-add-form label span,.modal-root .access-panel-footer span { font-size: 12px; }
 .modal-root .viewer-actions :is(a,button) { font-size: 14px; }
+.modal-root .access-panel-footer { grid-template-columns: auto minmax(0,1fr); }
+.modal-root .access-panel-footer strong { min-width: 0; overflow-wrap: anywhere; }
+.modal-root .reminder-loading { padding: 20px 24px; font-size: 14px; line-height: 1.5; }
 
 @media (max-width: 620px) {
   .modal-root { padding: 0; height: 100dvh; }
