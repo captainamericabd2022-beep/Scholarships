@@ -20,6 +20,9 @@ for (const table of tables) {
     if (table === "viewer_access" && /@example\.(com|org|net)$|^editor-test-/i.test(String(row.email))) continue;
     if ("user_id" in row) row.user_id = owner;
     for (const column of booleanColumns) if (column in row) row[column] = Boolean(row[column]);
+    if (table === "user_scholarship_tracking") {
+      try { if (/^Codex QA /i.test(JSON.parse(String(row.scholarship_json)).name ?? "")) row.is_active = false; } catch { /* Preserve malformed legacy records without interpreting them. */ }
+    }
     const columns = Object.keys(row);
     const params = columns.map((key) => row[key]);
     const query = `INSERT INTO "${table}" (${columns.map((c) => `"${c}"`).join(",")}) VALUES (${columns.map((_, i) => `$${i + 1}`).join(",")}) ON CONFLICT DO NOTHING RETURNING *`;

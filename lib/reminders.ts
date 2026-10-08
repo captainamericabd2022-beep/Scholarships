@@ -79,6 +79,7 @@ export function buildReminderEvents(
   const recentChangeCutoff = now.getTime() - 7 * 24 * 60 * 60 * 1000;
 
   for (const change of changes) {
+    if (change.changeType === "RETRACTED_EXTRACTION") continue;
     const changedAt = Date.parse(change.changedAt);
     if (!Number.isFinite(changedAt) || changedAt < recentChangeCutoff) continue;
     const scholarship = scholarshipById.get(change.scholarshipId);

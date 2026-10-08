@@ -399,21 +399,21 @@ export function extractAutomaticPatch(item: Scholarship, research: SourceResearc
   if (nextStatus !== item.baseStatus && !["SUBMITTED", "RESULT PENDING", "SELECTED"].includes(item.baseStatus)) {
     patch.baseStatus = nextStatus;
   }
-  const years = [...new Set([nextOpens?.slice(0, 4), nextDeadline?.slice(0, 4)].filter(Boolean))] as string[];
-  if (years.length && JSON.stringify(years) !== JSON.stringify(item.intakes)) patch.intakes = years;
+  // Application dates are not enrollment years: an October 2026 deadline can
+  // belong to a 2027 intake. Never infer intake years from opening/deadline dates.
   return patch;
 }
 
 export function analyzeAutomaticChanges(item: Scholarship, research: SourceResearch) {
-  const safePatch = extractAutomaticPatch(item, research);
-  const reviewPatch: Partial<Scholarship> = {};
+  const datePatch = extractAutomaticPatch(item, research);
+  const safePatch: Partial<Scholarship> = research.confidence === "established-official" ? datePatch : {};
+  const reviewPatch: Partial<Scholarship> = research.confidence === "established-official" ? {} : datePatch;
   for (const [field, value] of Object.entries(research.candidates) as Array<[MonitoredField, string | string[]]>) {
     if (JSON.stringify(item[field]) === JSON.stringify(value)) continue;
-    if (research.confidence === "established-official" && !research.ambiguousFields.includes(field)) {
-      (safePatch as Record<string, unknown>)[field] = value;
-    } else {
-      (reviewPatch as Record<string, unknown>)[field] = value;
-    }
+    // Official-domain provenance does not establish programme/award context.
+    // Heuristic snippets (including IELTS numbers and portal links) require
+    // human review before replacing a previously verified, complete fact.
+    (reviewPatch as Record<string, unknown>)[field] = value;
   }
   const changesFor = (patch: Partial<Scholarship>): FieldChange[] => Object.entries(patch)
     .filter(([field]) => field !== "baseStatus" && field !== "dateNote" && field !== "intakes")

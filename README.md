@@ -5,8 +5,8 @@ A responsive scholarship tracker built with Next.js, Clerk, Neon Postgres and Dr
 ## Features
 
 - Scholarship filters, official-source monitoring and a review queue for ambiguous changes.
-- Owner-only editing, private assessments, notes, checklists and application statuses.
-- Owner-managed invitations; approved viewers receive shared scholarship facts, not the owner's profile or progress.
+- Administrator-only editing, shared private assessments, notes, checklists and application statuses.
+- Administrator-managed invitations; approved viewers receive shared scholarship facts, not the administrators' private profile or progress.
 - Deadline timeline, calendar exports, backup/restore, reminder catch-up and delivery history.
 - Responsive themes, favicons and a limited offline PWA view.
 
@@ -60,9 +60,11 @@ The current online launch uses Clerk development authentication and is labelled 
 
 Source refresh runs when the owner visits or manually checks. An unattended watch must be pointed at the new Vercel URL and tested separately; this repository does not claim a connected scheduler. Keep the existing watch rather than creating a duplicate. Email is unavailable until the sender is configured and tested. Never claim delivery without a recorded successful send.
 
+Explicit date signals from established official sources may update automatically. Heuristic text snippets for funding, eligibility, English, work experience, portals and programmes require administrator review before replacing verified facts. Application years never redefine intake years. Retracted extractions stay in the audit log but are excluded from verified-change alerts.
+
 ## Privacy and verification
 
-Private profile values are server-only and passed only to the owner. Approved viewers receive sanitized facts. Notes and checklists are stored in Neon, not bundled into public assets. Seeds retain their original verification dates; do not treat historical dates as current deadlines without an official-source check.
+Private profile values are server-only and passed only to explicitly allowlisted administrators. Approved viewers receive sanitized facts. Notes and checklists are stored in Neon, not bundled into public assets. Seeds retain their original verification dates; do not treat historical dates as current deadlines without an official-source check.
 
 Environment files, API keys, SQLite databases, build outputs and login cookies must not be committed. The original `.openai/hosting.json` association is retained for historical source compatibility, but excluded from Vercel deployments. The active Vercel app does not depend on Sites authentication or D1.
 

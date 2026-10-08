@@ -144,6 +144,7 @@ export async function GET(request: Request) {
         lastCheckedAt: row.lastCheckedAt,
       })),
       changes: isOwner ? changeRows.filter((row) => {
+        if (row.changeType === "RETRACTED_EXTRACTION") return false;
         const timestamp = Date.parse(row.changedAt);
         return Number.isFinite(timestamp) && timestamp >= weekAgo;
       }).map((row) => ({ ...row, fieldChanges: safeJson(row.fieldChangesJson) })) : [],

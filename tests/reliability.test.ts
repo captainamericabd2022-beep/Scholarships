@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { buildReminderEvents, daysUntilDateKey, eventsForPreferences, selectCatchUpEvents } from "../lib/reminders.ts";
 import { scholarships } from "../lib/scholarships.ts";
-import { extractSourceSignals } from "../lib/source-research.ts";
+import { analyzeAutomaticChanges, extractSourceSignals, type SourceResearch } from "../lib/source-research.ts";
 
 const target = { ...scholarships[0], opens: null, deadline: "2027-01-10" };
 const preferences = { email: "owner@example.com", isEnabled: true, scholarshipChanges: true, openingReminders: true, deadlineReminders: true, deadlineThresholds: [7, 3, 1] };
@@ -45,6 +45,24 @@ test("viewer response excludes owner profile and application progress", async ()
   assert.match(route, /delete shared\.fit;/);
   assert.match(route, /delete shared\.notes;/);
   assert.match(route, /changes: isOwner \?/);
+});
+
+test("official text fragments require review and deadline years never redefine intakes", () => {
+  const item = { ...scholarships[0], intakes: ["2027"], deadline: null, opens: null };
+  const research: SourceResearch = { title: "Official scholarship", text: "", contentHash: "fixture", httpStatus: 200, finalUrl: item.officialNoticeUrl, opens: null, deadline: "2026-12-31", confidence: "established-official", ambiguousFields: [], candidates: { fundingCovers: "Separate merit award only", englishRequirements: "Read the general instructions", applyUrl: "https://official.example/application-instructions" } };
+  const result = analyzeAutomaticChanges(item, research);
+  assert.equal(result.safePatch.deadline, "2026-12-31");
+  assert.equal(result.safePatch.intakes, undefined);
+  assert.equal(result.safePatch.fundingCovers, undefined);
+  assert.equal(result.safePatch.englishRequirements, undefined);
+  assert.equal(result.safePatch.applyUrl, undefined);
+  assert.equal(result.reviewPatch.fundingCovers, research.candidates.fundingCovers);
+  assert.equal(analyzeAutomaticChanges(item, { ...research, confidence: "candidate-official" }).safePatch.deadline, undefined);
+});
+
+test("retracted automatic extractions never become verified-change email events", () => {
+  const events = buildReminderEvents([target], [{ id: 99, scholarshipId: target.id, changeType: "RETRACTED_EXTRACTION", summary: "Needs review", sourceUrl: target.officialNoticeUrl, changedAt: "2027-01-08T00:00:00Z" }], new Date("2027-01-08T00:00:00Z"));
+  assert.equal(events.some((event) => event.type === "scholarship-change"), false);
 });
 
 test("mobile reminder modal is closable and viewport-safe", async () => {

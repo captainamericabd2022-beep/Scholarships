@@ -11,8 +11,9 @@ enableWindowsTransport();
 const fixtureId = `launch-verification-${randomUUID()}`;
 const fixtureUser = `test:${fixtureId}`;
 const db = getDb();
+const fixtureNotes = "Verification fixture — বাংলা €";
 try {
-  await db.insert(userProgress).values({ userId: fixtureUser, scholarshipId: fixtureId, status: "PREPARING", notes: "Verification fixture", checklistJson: JSON.stringify({ Passport: true, IELTS: false }) });
+  await db.insert(userProgress).values({ userId: fixtureUser, scholarshipId: fixtureId, status: "PREPARING", notes: fixtureNotes, checklistJson: JSON.stringify({ Passport: true, IELTS: false }) });
   const created = await saveManualEdit(fixtureId, fixtureUser, { deadline: "2027-01-15", notes: "Private fixture", fit: "Reach" }, 0);
   assert.equal(created?.revision, 1);
   assert.equal(await saveManualEdit(fixtureId, fixtureUser, { deadline: "2027-01-16" }, 0), null);
@@ -23,7 +24,7 @@ try {
   assert.deepEqual(publicManualPatch(updated!.patch), { deadline: "2027-01-17" });
   await db.insert(scholarshipUpdates).values({ scholarshipId: fixtureId, patchJson: JSON.stringify({ deadline: "2027-02-01" }), sourceUrl: "https://example.org/verification-fixture", verifiedAt: new Date().toISOString() });
   const [saved] = await db.select().from(userProgress).where(eq(userProgress.scholarshipId, fixtureId));
-  assert.equal(saved.notes, "Verification fixture");
+  assert.equal(saved.notes, fixtureNotes);
   assert.equal(saved.status, "PREPARING");
   assert.deepEqual(JSON.parse(saved.checklistJson), { Passport: true, IELTS: false });
   console.log("PASS: Neon persistence, duplicate/stale-edit protection, private-field filtering and progress preservation.");
